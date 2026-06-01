@@ -1,73 +1,73 @@
 'use client';
 
-import { loadStripe } from '@stripe/stripe-js';
 import { useState } from 'react';
-
-// Force any type to bypass stubborn TS issue
-const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!) as Promise<any>;
+import { Check, Sparkles } from 'lucide-react';
 
 export default function Pricing() {
   const [loading, setLoading] = useState(false);
 
   const handleSubscribe = async () => {
     setLoading(true);
-
     try {
-      const response = await fetch('/api/create-checkout', { 
-        method: 'POST' 
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to create checkout session');
+      const response = await fetch('/api/create-checkout', { method: 'POST' });
+      if (!response.ok) throw new Error('Failed to create checkout session');
+      const { url } = await response.json();
+      if (url) {
+        window.location.href = url;
+      } else {
+        alert("No checkout redirection URL received.");
       }
-
-      const { sessionId } = await response.json();
-
-      const stripe = await stripePromise;
-      
-      if (!stripe) {
-        alert("Stripe failed to load. Please refresh the page.");
-        return;
-      }
-
-      // This should finally satisfy TypeScript
-      await stripe.redirectToCheckout({
-        sessionId: sessionId as string,
-      });
-
     } catch (err: any) {
       console.error(err);
-      alert("Payment error: " + (err.message || "Please try again"));
+      alert("Checkout error: " + (err.message || "Please try again"));
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="max-w-3xl mx-auto py-24 px-6 text-center">
-      <h1 className="text-6xl font-bold mb-6">Simple, transparent pricing</h1>
-      <p className="text-2xl text-zinc-600 mb-16">One plan. Everything included.</p>
+    <div className="min-h-screen bg-zinc-50 flex flex-col justify-center items-center py-16 px-4 relative overflow-hidden">
+      <div className="absolute inset-0 bg-[linear-gradient(to_right,#e4e4e7_1px,transparent_1px),linear-gradient(to_bottom,#e4e4e7_1px,transparent_1px)] bg-[size:4rem_4rem] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_50%,#000_70%,transparent_100%)] opacity-40 pointer-events-none" />
 
-      <div className="border-2 border-black rounded-3xl p-12 max-w-md mx-auto">
-        <p className="text-sm uppercase tracking-widest text-zinc-500">PRO PLAN</p>
-        <div className="text-7xl font-bold my-6">$19<span className="text-3xl font-normal">/mo</span></div>
+      <div className="max-w-2xl text-center mb-12 relative z-10 space-y-3">
+        <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-zinc-900 text-white rounded-full text-[10px] font-black uppercase tracking-wider">
+          <Sparkles className="w-3 h-3 text-emerald-400" /> Simple, Transparent Access
+        </div>
+        <h1 className="text-4xl font-black tracking-tight text-zinc-950 sm:text-5xl">One plan. Infinite delivery tools.</h1>
+        <p className="text-base text-zinc-500 font-medium max-w-md mx-auto">Get absolute access to all portal sharing environments, messaging structures, and document distribution tracking loops.</p>
+      </div>
+
+      <div className="w-full max-w-sm bg-white border border-zinc-200 rounded-3xl p-8 shadow-xs md:p-10 relative z-10 transition hover:border-zinc-300">
+        <div className="text-xs uppercase tracking-widest text-zinc-400 font-black mb-1">THE PRO WORKSPACE</div>
+        <div className="flex items-baseline font-black text-zinc-950 text-5xl">
+          $19<span className="text-lg font-bold text-zinc-400 tracking-normal ml-1">/month</span>
+        </div>
         
-        <ul className="text-left space-y-4 mb-12 text-lg">
-          <li>✓ Unlimited client portals</li>
-          <li>✓ File sharing &amp; storage</li>
-          <li>✓ Real-time messaging</li>
-          <li>✓ Magic links (no client login)</li>
-          <li>✓ Mobile-friendly design</li>
+        <ul className="mt-8 space-y-3.5 text-xs font-semibold text-zinc-600 border-t border-zinc-100 pt-6">
+          <li className="flex items-center gap-2.5 text-zinc-900">
+            <Check className="w-4 h-4 text-zinc-950 shrink-0" strokeWidth={3} /> Unlimited functional client portal nodes
+          </li>
+          <li className="flex items-center gap-2.5">
+            <Check className="w-4 h-4 text-zinc-400 shrink-0" strokeWidth={3} /> Document inventory tracking & validation
+          </li>
+          <li className="flex items-center gap-2.5">
+            <Check className="w-4 h-4 text-zinc-400 shrink-0" strokeWidth={3} /> Active real-time multi-channel communication
+          </li>
+          <li className="flex items-center gap-2.5">
+            <Check className="w-4 h-4 text-zinc-400 shrink-0" strokeWidth={3} /> Magic link tokens (zero client login Friction)
+          </li>
+          <li className="flex items-center gap-2.5">
+            <Check className="w-4 h-4 text-zinc-400 shrink-0" strokeWidth={3} /> Full optimized screen design scaling
+          </li>
         </ul>
 
         <button
           onClick={handleSubscribe}
           disabled={loading}
-          className="w-full bg-black hover:bg-zinc-800 text-white py-5 rounded-2xl text-xl font-medium disabled:opacity-70 transition-all"
+          className="mt-8 w-full bg-zinc-950 hover:bg-zinc-800 disabled:opacity-40 text-white py-3.5 rounded-xl font-bold text-sm transition shadow-xs cursor-pointer text-center block"
         >
-          {loading ? "Redirecting to Stripe..." : "Start 14-day Free Trial"}
+          {loading ? "Configuring Session..." : "Activate Pro Plan Access"}
         </button>
-        <p className="text-sm text-zinc-500 mt-6">Cancel anytime • No card needed to start</p>
       </div>
     </div>
   );

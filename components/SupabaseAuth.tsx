@@ -1,12 +1,7 @@
 'use client';
 
-import { createClient } from '@supabase/supabase-js';
 import { useEffect, useState } from 'react';
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+import { supabase } from '@/lib/supabase'; // ← CRITICAL: Import your shared instance here
 
 export function SupabaseAuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<any>(null);
