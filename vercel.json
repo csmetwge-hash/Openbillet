@@ -1,0 +1,8 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/escalate?secret=hq_automation_override_2026",
+      "schedule": "0 8 * * *"
+    }
+  ]
+}
