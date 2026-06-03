@@ -1,40 +1,45 @@
 'use client';
 
-import { useEffect, useState, use } from 'react';
+import { useEffect, useState, use, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
-import { 
-  CheckCircle2, 
-  Circle, 
-  FileText, 
-  Clock, 
-  DollarSign, 
+import {
+  CheckCircle2,
+  Circle,
+  FileText,
+  Clock,
   Send,
-  Download
+  Download,
+  ExternalLink,
+  MessageSquare,
+  Layers,
+  FolderOpen,
+  ClipboardList,
+  ChevronRight,
+  Paperclip,
 } from 'lucide-react';
 
 interface Portal {
   id: string;
   client_name: string;
   project_name: string;
-  status: string;
   brand_name?: string;
   brand_logo_url?: string;
+  magic_token: string;
 }
 
 interface Milestone {
   id: string;
   title: string;
-  responsibility: 'provider' | 'client';
-  status: 'incomplete' | 'completed';
+  status: string;
+  responsibility: string;
   payment_request?: string;
-  reminder_days?: number;
 }
 
 interface PortalFile {
   id: string;
   file_name: string;
   file_path: string;
-  status: 'pending_review' | 'approved' | 'revision_requested';
+  status: string;
 }
 
 interface Note {
@@ -44,281 +49,469 @@ interface Note {
   created_at: string;
 }
 
-export default function ClientPortalWorkspace({ params }: { params: Promise<{ token: string }> }) {
+interface Proposal {
+  id: string;
+  title: string;
+  status: string;
+  total_amount?: string;
+  body: string;
+  accepted_at?: string;
+  accepted_signature?: string;
+  line_items?: LineItem[];
+}
+
+interface LineItem {
+  id: string;
+  description: string;
+  quantity: number;
+  unit_price: number;
+}
+
+type Tab = 'overview' | 'files' | 'messages' | 'proposals';
+
+export default function ClientPortal({ params }: { params: Promise<{ token: string }> }) {
   const { token } = use(params);
   const [portal, setPortal] = useState<Portal | null>(null);
   const [milestones, setMilestones] = useState<Milestone[]>([]);
   const [files, setFiles] = useState<PortalFile[]>([]);
   const [notes, setNotes] = useState<Note[]>([]);
-  
+  const [proposals, setProposals] = useState<Proposal[]>([]);
+  const [activeTab, setActiveTab] = useState<Tab>('overview');
+  const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'active' | 'completed' | 'files' | 'chat'>('active');
-  const [newNote, setNewNote] = useState('');
-
-  const fetchPortalData = async () => {
-    try {
-      const { data: portalData, error: pErr } = await supabase
-        .from('client_portals')
-        .select('*')
-        .eq('magic_token', token)
-        .single();
-
-      if (pErr || !portalData) return;
-      setPortal(portalData);
-
-      const [milestonesRes, filesRes, notesRes] = await Promise.all([
-        supabase.from('portal_milestones').select('*').eq('portal_id', portalData.id).order('created_at', { ascending: true }),
-        supabase.from('portal_files').select('*').eq('portal_id', portalData.id).order('created_at', { ascending: false }),
-        supabase.from('portal_notes').select('*').eq('portal_id', portalData.id).order('created_at', { ascending: true })
-      ]);
-
-      setMilestones(milestonesRes.data || []);
-      setFiles(filesRes.data || []);
-      setNotes(notesRes.data || []);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const [notFound, setNotFound] = useState(false);
+  const [signingProposal, setSigningProposal] = useState<string | null>(null);
+  const [signature, setSignature] = useState('');
+  const [signing, setSigning] = useState(false);
+  const chatEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (token) fetchPortalData();
+    fetchPortal();
   }, [token]);
 
-  const handleUpdateFileStatus = async (fileId: string, nextStatus: 'approved' | 'revision_requested') => {
-    const { error } = await supabase
-      .from('portal_files')
-      .update({ status: nextStatus })
-      .eq('id', fileId);
+  useEffect(() => {
+    if (!portal) return;
+    const channel = supabase
+      .channel(`client-notes-${portal.id}`)
+      .on('postgres_changes', {
+        event: 'INSERT', schema: 'public', table: 'portal_notes',
+        filter: `portal_id=eq.${portal.id}`
+      }, (payload) => setNotes(prev => [...prev, payload.new as Note]))
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [portal]);
 
-    if (!error) {
-      // Inject a system log event message into the timeline automatically
-      const label = nextStatus === 'approved' ? 'APPROVED asset deliverable' : 'REQUESTED CHANGES/REVISIONS on asset deliverable';
-      await supabase.from('portal_notes').insert([
-        { portal_id: portal?.id, message: `[System Update] Client has officially ${label}.`, is_from_client: true }
-      ]);
-      fetchPortalData();
-    }
-  };
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [notes]);
 
-  const handleSendClientNote = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newNote.trim() || !portal) return;
+  const fetchPortal = async () => {
+    const { data: portalData, error } = await supabase
+      .from('client_portals')
+      .select('*')
+      .eq('magic_token', token)
+      .eq('status', 'active')
+      .single();
 
-    const { error } = await supabase.from('portal_notes').insert([
-      { portal_id: portal.id, message: newNote.trim(), is_from_client: true }
+    if (error || !portalData) { setNotFound(true); setLoading(false); return; }
+    setPortal(portalData);
+
+    const [ms, fs, ns, ps] = await Promise.all([
+      supabase.from('portal_milestones').select('*').eq('portal_id', portalData.id).order('created_at', { ascending: true }),
+      supabase.from('portal_files').select('*').eq('portal_id', portalData.id).order('created_at', { ascending: false }),
+      supabase.from('portal_notes').select('*').eq('portal_id', portalData.id).order('created_at', { ascending: true }),
+      supabase.from('portal_proposals').select('*, proposal_line_items(*)').eq('portal_id', portalData.id).neq('status', 'draft').order('created_at', { ascending: false }),
     ]);
-    if (!error) {
-      setNewNote('');
-      fetchPortalData();
-    }
+
+    setMilestones(ms.data || []);
+    setFiles(fs.data || []);
+    setNotes(ns.data || []);
+    setProposals((ps.data || []).map((p: any) => ({ ...p, line_items: p.proposal_line_items || [] })));
+    setLoading(false);
   };
 
-  if (loading) return <div className="min-h-screen bg-zinc-900 text-zinc-400 flex items-center justify-center text-xs uppercase tracking-widest">Hydrating Secure Link Route...</div>;
-  if (!portal) return <div className="min-h-screen bg-zinc-900 text-white flex items-center justify-center text-xs uppercase">Secure Workspace Portal Link Expired or Invalid.</div>;
+  const sendMessage = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!message.trim() || !portal) return;
+    await supabase.from('portal_notes').insert({
+      portal_id: portal.id,
+      message: message.trim(),
+      is_from_client: true,
+    });
+    setMessage('');
+  };
+
+  const getFileUrl = (path: string) => {
+    const { data } = supabase.storage.from('portal-files').getPublicUrl(path);
+    return data.publicUrl;
+  };
+
+  const acceptProposal = async (proposalId: string) => {
+    if (!signature.trim()) return;
+    setSigning(true);
+    await supabase.from('portal_proposals').update({
+      status: 'accepted',
+      accepted_at: new Date().toISOString(),
+      accepted_signature: signature.trim(),
+    }).eq('id', proposalId);
+    setProposals(prev => prev.map(p => p.id === proposalId
+      ? { ...p, status: 'accepted', accepted_signature: signature.trim(), accepted_at: new Date().toISOString() }
+      : p
+    ));
+    setSigningProposal(null);
+    setSignature('');
+    setSigning(false);
+  };
+
+  const completedCount = milestones.filter(m => m.status === 'completed').length;
+  const totalCount = milestones.length;
+  const progressPct = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
+  const pendingProposals = proposals.filter(p => p.status === 'sent');
+
+  if (loading) return (
+    <div className="min-h-screen bg-zinc-50 flex items-center justify-center">
+      <div className="h-6 w-6 border-2 border-zinc-300 border-t-zinc-800 rounded-full animate-spin" />
+    </div>
+  );
+
+  if (notFound) return (
+    <div className="min-h-screen bg-zinc-50 flex items-center justify-center p-6">
+      <div className="text-center space-y-2">
+        <p className="text-lg font-bold text-zinc-900">Portal not found</p>
+        <p className="text-sm text-zinc-500">This link may have expired or been deactivated.</p>
+      </div>
+    </div>
+  );
+
+  const brandName = portal!.brand_name || 'Your Project';
+  const tabs: { key: Tab; label: string; icon: React.ReactNode; badge?: number }[] = [
+    { key: 'overview', label: 'Overview', icon: <Layers className="w-4 h-4" /> },
+    { key: 'files', label: 'Files', icon: <FolderOpen className="w-4 h-4" />, badge: files.length },
+    { key: 'messages', label: 'Messages', icon: <MessageSquare className="w-4 h-4" /> },
+    { key: 'proposals', label: 'Proposals', icon: <ClipboardList className="w-4 h-4" />, badge: pendingProposals.length || undefined },
+  ];
 
   return (
-    <div className="min-h-screen bg-zinc-900 print:bg-white text-zinc-100 print:text-zinc-900 font-sans antialiased relative selection:bg-zinc-700 selection:text-white">
-      <div className="absolute inset-0 bg-[linear-gradient(to_right,#27272a_1px,transparent_1px),linear-gradient(to_bottom,#27272a_1px,transparent_1px)] bg-[size:4rem_4rem] opacity-20 pointer-events-none print:hidden" />
+    <div className="min-h-screen bg-zinc-50 font-sans antialiased">
 
-      {/* Main Container Core Layout Grid */}
-      <div className="max-w-4xl mx-auto px-6 py-12 relative z-10 print:p-0 print:bg-white">
-        
-        {/* ========================================== */}
-        {/* PLACEMENT 1: WHITE-LABEL HEADER INTEGRATION */}
-        {/* ========================================== */}
-        <div className="flex items-center justify-between border-b border-zinc-800 print:border-zinc-200 pb-6 mb-8">
-          <div>
-            {portal.brand_logo_url ? (
-              <img 
-                src={portal.brand_logo_url} 
-                alt={portal.brand_name || 'Agency Logo'} 
-                className="h-8 w-auto object-contain max-w-[160px] mb-2 print:invert-0"
-              />
+      {/* ── Header ─────────────────────────────────────────────── */}
+      <div className="bg-white border-b border-zinc-200 sticky top-0 z-40">
+        <div className="max-w-2xl mx-auto px-4 py-4 flex items-center justify-between">
+          <div className="flex items-center gap-3 min-w-0">
+            {portal!.brand_logo_url ? (
+              <img src={portal!.brand_logo_url} alt={brandName} className="h-8 w-8 rounded-lg object-cover shrink-0" />
             ) : (
-              <span className="text-[10px] font-black tracking-widest uppercase text-white bg-zinc-800 print:bg-zinc-100 print:text-zinc-900 border border-zinc-700 print:border-zinc-300 px-2.5 py-1 rounded">
-                {portal.brand_name || "OPERATIONS WORKSPACE"}
-              </span>
+              <div className="h-8 w-8 bg-zinc-900 rounded-lg shrink-0 flex items-center justify-center">
+                <span className="text-white text-[10px] font-black">{brandName[0]}</span>
+              </div>
             )}
-            <h1 className="text-lg font-black tracking-tight text-white print:text-zinc-900 mt-3">{portal.client_name}</h1>
-            <p className="text-xs text-zinc-400 print:text-zinc-500">{portal.project_name}</p>
+            <div className="min-w-0">
+              <p className="text-sm font-black text-zinc-900 truncate">{brandName}</p>
+              <p className="text-[11px] text-zinc-500 font-medium truncate">{portal!.project_name}</p>
+            </div>
           </div>
-          
-          <div className="text-right font-mono text-[10px] text-zinc-500">
-            <span>Statement Generated: {new Date().toLocaleDateString()}</span>
-          </div>
-        </div>
-
-        {/* ======================================================= */}
-        {/* PLACEMENT 2: OFFLINE STATEMENT PDF PRINT BAR DOWNLOADER */}
-        {/* ======================================================= */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 bg-zinc-800/40 border border-zinc-800 rounded-xl mb-8 print:hidden">
-          <div>
-            <h4 className="text-xs font-bold text-white uppercase tracking-wider">Project Ledger Offline Storage</h4>
-            <p className="text-[11px] text-zinc-400 mt-0.5">Download a complete, certified PDF transcript of your project history, milestones, and settled payments.</p>
-          </div>
-          <button
-            onClick={() => window.print()}
-            className="bg-white hover:bg-zinc-200 text-zinc-900 text-xs font-bold uppercase tracking-wider px-4 py-2.5 rounded-xl transition flex items-center justify-center gap-2 font-sans cursor-pointer shrink-0 shadow-sm"
-          >
-            <FileText className="w-3.5 h-3.5" />
-            Download PDF Statement
-          </button>
-        </div>
-
-        {/* INTERACTIVE NAVIGATION TAB FILTERS - Strips automatically on print profiles */}
-        <div className="flex flex-wrap gap-2 border-b border-zinc-800 pb-4 mb-6 print:hidden">
-          {(['active', 'completed', 'files', 'chat'] as const).map((tab) => (
-            <button
-              key={tab}
-              onClick={() => setActiveTab(tab)}
-              className={`text-xs font-bold uppercase tracking-wider px-4 py-2.5 rounded-xl transition cursor-pointer ${activeTab === tab ? 'bg-white text-zinc-900' : 'bg-zinc-800 text-zinc-400 hover:text-white border border-zinc-700/50'}`}
-            >
-              {tab === 'active' ? '⚡ Active Objectives' : tab === 'completed' ? '✔ Settled / History' : tab === 'files' ? '📁 Shared Deliverables' : '💬 Team Chat'}
-            </button>
-          ))}
-        </div>
-
-        {/* TAB WORKSPACE PANELS ROUTER */}
-        <div className="space-y-4">
-          
-          {/* Active / Completed Target List Render Pipeline */}
-          {(activeTab === 'active' || activeTab === 'completed' || window.matchMedia('print').matches) && (
-            <div className={`space-y-4 ${activeTab === 'completed' ? 'print:block' : 'print:hidden'}`}>
-              {milestones.filter(m => window.matchMedia('print').matches || (activeTab === 'active' ? m.status === 'incomplete' : m.status === 'completed')).length === 0 ? (
-                <p className="text-xs text-zinc-500 py-6 italic text-center print:hidden">No objective items matching this roadmap index.</p>
-              ) : (
-                milestones
-                  .filter(m => window.matchMedia('print').matches || (activeTab === 'active' ? m.status === 'incomplete' : m.status === 'completed'))
-                  .map((m) => (
-                    <div key={m.id} className="p-4 bg-zinc-800/20 border border-zinc-800 print:border-zinc-200 rounded-xl space-y-2 print:bg-white">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2.5">
-                          {m.status === 'completed' ? <CheckCircle2 className="w-4 h-4 text-emerald-400 print:text-zinc-900" /> : <Circle className="w-4 h-4 text-zinc-600 print:hidden" />}
-                          <span className={`text-sm font-bold ${m.status === 'completed' ? 'text-zinc-400 line-through print:no-underline print:text-zinc-900' : 'text-zinc-100 print:text-zinc-900'}`}>{m.title}</span>
-                        </div>
-                        <span className="text-[9px] font-mono uppercase bg-zinc-800 print:bg-zinc-100 text-zinc-400 print:text-zinc-600 border border-zinc-700 print:border-zinc-300 px-2 py-0.5 rounded">Action: {m.responsibility}</span>
-                      </div>
-
-                      {/* ========================================================= */}
-                      {/* PLACEMENT 3: CLICKABLE STRIPE / ACCREDITED INVOICE LINKS */}
-                      {/* ========================================================= */}
-                      {m.payment_request && (
-                        <div className="mt-2 text-xs font-medium text-amber-300 bg-amber-500/10 border border-amber-500/20 px-3 py-2 rounded-xl w-fit flex items-center gap-2 print:bg-transparent print:border-0 print:text-zinc-800 print:p-0">
-                          <DollarSign className="w-3.5 h-3.5 text-amber-400 print:text-zinc-900" />
-                          
-                          {m.payment_request.includes('http') ? (
-                            <a 
-                              href={m.payment_request.match(/https?:\/\/[^\s]+/)?.[0]} 
-                              target="_blank" 
-                              rel="noopener noreferrer"
-                              className="underline hover:text-white transition font-bold uppercase tracking-wider text-[10px] bg-amber-500 text-zinc-900 px-2.5 py-1 rounded-lg no-underline inline-flex items-center gap-1 shadow-sm print:hidden"
-                            >
-                              Authorize Secure Payment Link ↗
-                            </a>
-                          ) : (
-                            <span>Request Status: {m.payment_request}</span>
-                          )}
-                          {/* Fallback display layout text specifically formatted for printed documents */}
-                          <span className="hidden print:inline font-mono text-xs">Ledger Entry: {m.payment_request}</span>
-                        </div>
-                      )}
-
-                      {m.reminder_days && m.status !== 'completed' && (
-                        <div className="text-[10px] font-mono text-zinc-400 flex items-center gap-1 print:hidden">
-                          <Clock className="w-3 h-3" /> Soft follow-up interval loops every {m.reminder_days} days until verified.
-                        </div>
-                      )}
-                    </div>
-                  ))
-              )}
+          {totalCount > 0 && (
+            <div className="shrink-0 text-right">
+              <p className="text-xs font-black text-zinc-900">{progressPct}%</p>
+              <p className="text-[10px] text-zinc-400">{completedCount}/{totalCount} done</p>
             </div>
           )}
+        </div>
 
-          {/* Files Document Delivery Vault Deck */}
-          {activeTab === 'files' && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 print:hidden">
-              {files.length === 0 ? (
-                <p className="text-xs text-zinc-500 py-6 italic text-center col-span-2">No file modules deployed to this storage tree node yet.</p>
-              ) : (
-                files.map((f) => (
-                  <div key={f.id} className="p-4 bg-zinc-800/20 border border-zinc-800 rounded-xl flex flex-col justify-between gap-4">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="flex items-center gap-2 truncate">
-                        <FileText className="w-4 h-4 text-zinc-400 shrink-0" />
-                        <span className="text-xs font-bold text-white truncate">{f.file_name}</span>
+        {/* Progress bar */}
+        {totalCount > 0 && (
+          <div className="h-0.5 bg-zinc-100">
+            <div
+              className="h-full bg-zinc-900 transition-all duration-500"
+              style={{ width: `${progressPct}%` }}
+            />
+          </div>
+        )}
+      </div>
+
+      {/* ── Tab Nav ────────────────────────────────────────────── */}
+      <div className="bg-white border-b border-zinc-100 sticky top-[69px] z-30">
+        <div className="max-w-2xl mx-auto px-4">
+          <div className="flex gap-1 overflow-x-auto scrollbar-none py-1">
+            {tabs.map(tab => (
+              <button
+                key={tab.key}
+                onClick={() => setActiveTab(tab.key)}
+                className={`flex items-center gap-1.5 px-3 py-2.5 rounded-xl text-xs font-bold whitespace-nowrap transition cursor-pointer relative ${
+                  activeTab === tab.key
+                    ? 'bg-zinc-950 text-white'
+                    : 'text-zinc-500 hover:text-zinc-800 hover:bg-zinc-50'
+                }`}
+              >
+                {tab.icon}
+                {tab.label}
+                {tab.badge ? (
+                  <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-full ${activeTab === tab.key ? 'bg-white text-zinc-900' : 'bg-zinc-200 text-zinc-700'}`}>
+                    {tab.badge}
+                  </span>
+                ) : null}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* ── Content ────────────────────────────────────────────── */}
+      <div className="max-w-2xl mx-auto px-4 py-6 pb-24">
+
+        {/* OVERVIEW TAB */}
+        {activeTab === 'overview' && (
+          <div className="space-y-4">
+            {milestones.length === 0 ? (
+              <div className="text-center py-16 text-zinc-400">
+                <Layers className="w-8 h-8 mx-auto mb-2 opacity-30" />
+                <p className="text-sm font-medium">No milestones yet</p>
+              </div>
+            ) : (
+              milestones.map((m, i) => {
+                const isPaymentLink = m.payment_request?.startsWith('http');
+                return (
+                  <div key={m.id} className={`bg-white rounded-2xl border p-4 transition ${m.status === 'completed' ? 'border-zinc-100 opacity-70' : 'border-zinc-200'}`}>
+                    <div className="flex items-start gap-3">
+                      <div className="shrink-0 mt-0.5">
+                        {m.status === 'completed'
+                          ? <CheckCircle2 className="w-5 h-5 text-emerald-500" />
+                          : m.status === 'in_progress'
+                          ? <Clock className="w-5 h-5 text-amber-400" />
+                          : <Circle className="w-5 h-5 text-zinc-300" />
+                        }
                       </div>
-                      <span className={`text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded border shrink-0 ${
-                        f.status === 'approved' ? 'bg-emerald-950/40 text-emerald-400 border-emerald-800/60' :
-                        f.status === 'revision_requested' ? 'bg-rose-950/40 text-rose-400 border-rose-800/60' : 'bg-zinc-800 text-zinc-400 border-zinc-700'
-                      }`}>{f.status.replace('_', ' ')}</span>
-                    </div>
-
-                    <div className="flex items-center justify-between gap-2 border-t border-zinc-800/60 pt-3">
-                      <a
-                        href={`${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/portal-files/${f.file_path}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-[10px] font-bold uppercase tracking-wider text-zinc-300 hover:text-white flex items-center gap-1 bg-zinc-800 border border-zinc-700 px-3 py-1.5 rounded-lg transition"
-                      >
-                        <Download className="w-3 h-3" /> View / Save
-                      </a>
-
-                      {f.status === 'pending_review' && (
-                        <div className="flex gap-1">
-                          <button onClick={() => handleUpdateFileStatus(f.id, 'revision_requested')} className="bg-rose-950/40 hover:bg-rose-900/30 text-rose-400 border border-rose-900/50 text-[9px] font-bold uppercase tracking-wider px-2 py-1.5 rounded-lg transition cursor-pointer">Revisions</button>
-                          <button onClick={() => handleUpdateFileStatus(f.id, 'approved')} className="bg-white hover:bg-zinc-200 text-zinc-900 text-[9px] font-bold uppercase tracking-wider px-3 py-1.5 rounded-lg transition cursor-pointer">Sign-off</button>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between gap-2">
+                          <p className={`text-sm font-semibold ${m.status === 'completed' ? 'line-through text-zinc-400' : 'text-zinc-900'}`}>
+                            {m.title}
+                          </p>
+                          <span className={`shrink-0 text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full ${
+                            m.status === 'completed' ? 'bg-emerald-50 text-emerald-600'
+                            : m.status === 'in_progress' ? 'bg-amber-50 text-amber-600'
+                            : 'bg-zinc-100 text-zinc-500'
+                          }`}>
+                            {m.status.replace('_', ' ')}
+                          </span>
                         </div>
-                      )}
+                        {m.responsibility === 'client' && m.status !== 'completed' && (
+                          <p className="text-[11px] text-amber-600 font-semibold mt-1">Action required from you</p>
+                        )}
+                        {m.payment_request && (
+                          <div className="mt-3">
+                            {isPaymentLink ? (
+                              <a
+                                href={m.payment_request}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-2 bg-zinc-900 text-white text-xs font-bold px-4 py-2.5 rounded-xl hover:bg-zinc-700 transition"
+                              >
+                                Pay Now <ExternalLink className="w-3.5 h-3.5" />
+                              </a>
+                            ) : (
+                              <p className="text-xs text-zinc-600 bg-zinc-50 border border-zinc-200 rounded-xl px-3 py-2 font-medium">
+                                {m.payment_request}
+                              </p>
+                            )}
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
-                ))
-              )}
-            </div>
-          )}
+                );
+              })
+            )}
+          </div>
+        )}
 
-          {/* Chat Timelines Message Stream Console */}
-          {activeTab === 'chat' && (
-            <div className="bg-zinc-900 border border-zinc-800 p-4 rounded-xl space-y-4 print:hidden">
-              <div className="h-[280px] overflow-y-auto space-y-3 pr-1 border border-zinc-800 p-4 bg-zinc-800/20 rounded-xl">
-                {notes.length === 0 ? (
-                  <p className="text-xs text-zinc-500 py-8 text-center italic">Timeline message ledger is clear.</p>
-                ) : (
-                  notes.map((n) => (
-                    <div key={n.id} className={`flex gap-2 max-w-[85%] ${n.is_from_client ? 'ml-auto flex-row-reverse' : ''}`}>
-                      <div className={`p-1 h-5 w-5 rounded border flex items-center justify-center shrink-0 text-[9px] font-bold ${n.is_from_client ? 'bg-white text-zinc-900 border-white' : 'bg-zinc-700 text-zinc-200 border-zinc-600'}`}>
-                        {n.is_from_client ? 'C' : 'M'}
-                      </div>
-                      <div className={`p-3 rounded-2xl text-xs leading-relaxed border ${
-                        n.message.startsWith('[System Update]') ? 'bg-zinc-900/50 text-zinc-400 font-mono text-[10px] border-zinc-800' :
-                        n.is_from_client ? 'bg-zinc-800 border-zinc-700 text-zinc-200' : 'bg-zinc-800/40 border-zinc-700 text-zinc-300'
-                      }`}>
-                        <p>{n.message}</p>
-                      </div>
-                    </div>
-                  ))
-                )}
+        {/* FILES TAB */}
+        {activeTab === 'files' && (
+          <div className="space-y-3">
+            {files.length === 0 ? (
+              <div className="text-center py-16 text-zinc-400">
+                <FolderOpen className="w-8 h-8 mx-auto mb-2 opacity-30" />
+                <p className="text-sm font-medium">No files yet</p>
               </div>
-              <form onSubmit={handleSendClientNote} className="flex gap-2">
+            ) : (
+              files.map(file => (
+                <div key={file.id} className="bg-white border border-zinc-200 rounded-2xl p-4 flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="p-2 bg-zinc-100 rounded-xl shrink-0">
+                      <Paperclip className="w-4 h-4 text-zinc-500" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-zinc-900 truncate">{file.file_name}</p>
+                      <span className={`text-[10px] font-bold uppercase tracking-wider ${file.status === 'approved' ? 'text-emerald-600' : 'text-amber-600'}`}>
+                        {file.status === 'approved' ? 'Approved' : 'Pending Review'}
+                      </span>
+                    </div>
+                  </div>
+                  <a
+                    href={getFileUrl(file.file_path)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="shrink-0 p-2.5 bg-zinc-900 text-white rounded-xl hover:bg-zinc-700 transition"
+                  >
+                    <Download className="w-4 h-4" />
+                  </a>
+                </div>
+              ))
+            )}
+          </div>
+        )}
+
+        {/* MESSAGES TAB */}
+        {activeTab === 'messages' && (
+          <div className="flex flex-col" style={{ minHeight: 'calc(100vh - 200px)' }}>
+            <div className="flex-1 space-y-3 pb-4">
+              {notes.length === 0 && (
+                <div className="text-center py-16 text-zinc-400">
+                  <MessageSquare className="w-8 h-8 mx-auto mb-2 opacity-30" />
+                  <p className="text-sm font-medium">No messages yet</p>
+                </div>
+              )}
+              {notes.map((n, i) => (
+                <div key={n.id || i} className={`flex ${n.is_from_client ? 'justify-end' : 'justify-start'}`}>
+                  <div className={`max-w-[80%] px-4 py-3 rounded-2xl text-sm leading-relaxed ${
+                    n.is_from_client
+                      ? 'bg-zinc-900 text-white rounded-br-sm'
+                      : 'bg-white border border-zinc-200 text-zinc-900 rounded-bl-sm'
+                  }`}>
+                    <p className="whitespace-pre-wrap">{n.message}</p>
+                    <p className={`text-[10px] mt-1 ${n.is_from_client ? 'text-zinc-400' : 'text-zinc-400'}`}>
+                      {new Date(n.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </p>
+                  </div>
+                </div>
+              ))}
+              <div ref={chatEndRef} />
+            </div>
+
+            {/* Sticky message input */}
+            <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-zinc-200 p-3 z-50">
+              <form onSubmit={sendMessage} className="max-w-2xl mx-auto flex gap-2">
                 <input
                   type="text"
-                  value={newNote}
-                  onChange={(e) => setNewNote(e.target.value)}
-                  placeholder="Post secure update note to operators..."
-                  className="flex-1 bg-zinc-800 border border-zinc-700 rounded-xl text-xs px-4 py-2.5 text-white focus:outline-none focus:border-zinc-500"
+                  value={message}
+                  onChange={e => setMessage(e.target.value)}
+                  placeholder="Send a message..."
+                  className="flex-1 bg-zinc-50 border border-zinc-200 rounded-2xl px-4 py-3 text-sm focus:outline-none focus:border-zinc-900 focus:bg-white transition"
                 />
-                <button type="submit" className="bg-white text-zinc-900 px-5 rounded-xl text-xs flex items-center justify-center font-bold hover:bg-zinc-200 transition"><Send className="w-3.5 h-3.5" /></button>
+                <button
+                  type="submit"
+                  disabled={!message.trim()}
+                  className="bg-zinc-900 text-white px-4 rounded-2xl disabled:opacity-40 transition hover:bg-zinc-700 cursor-pointer"
+                >
+                  <Send className="w-4 h-4" />
+                </button>
               </form>
             </div>
-          )}
+          </div>
+        )}
 
-        </div>
+        {/* PROPOSALS TAB */}
+        {activeTab === 'proposals' && (
+          <div className="space-y-4">
+            {proposals.length === 0 ? (
+              <div className="text-center py-16 text-zinc-400">
+                <ClipboardList className="w-8 h-8 mx-auto mb-2 opacity-30" />
+                <p className="text-sm font-medium">No proposals yet</p>
+              </div>
+            ) : (
+              proposals.map(proposal => (
+                <div key={proposal.id} className="bg-white border border-zinc-200 rounded-2xl overflow-hidden">
+                  {/* Proposal header */}
+                  <div className="p-4 border-b border-zinc-100 flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-black text-zinc-900">{proposal.title}</p>
+                      {proposal.total_amount && (
+                        <p className="text-lg font-black text-zinc-900 mt-1">{proposal.total_amount}</p>
+                      )}
+                    </div>
+                    <span className={`shrink-0 text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-full ${
+                      proposal.status === 'accepted' ? 'bg-emerald-50 text-emerald-600'
+                      : proposal.status === 'declined' ? 'bg-red-50 text-red-600'
+                      : 'bg-amber-50 text-amber-600'
+                    }`}>
+                      {proposal.status === 'sent' ? 'Awaiting Review' : proposal.status}
+                    </span>
+                  </div>
 
-        {/* Permanent Closing Legal Print Footnote */}
-        <div className="hidden print:block text-center pt-12 border-t border-zinc-200 text-[10px] text-zinc-400 font-mono">
-          This transcript represents a secure, white-labeled client operations overview ledger statement. Generated via native cryptographic token mapping parameters.
-        </div>
+                  {/* Line items */}
+                  {proposal.line_items && proposal.line_items.length > 0 && (
+                    <div className="p-4 border-b border-zinc-100 space-y-2">
+                      {proposal.line_items.map(item => (
+                        <div key={item.id} className="flex items-center justify-between text-sm">
+                          <span className="text-zinc-700">{item.description}</span>
+                          <span className="font-semibold text-zinc-900 shrink-0 ml-4">
+                            ${(item.quantity * item.unit_price).toLocaleString()}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Body */}
+                  {proposal.body && (
+                    <div className="p-4 border-b border-zinc-100">
+                      <p className="text-sm text-zinc-600 leading-relaxed whitespace-pre-wrap">{proposal.body}</p>
+                    </div>
+                  )}
+
+                  {/* Acceptance */}
+                  {proposal.status === 'sent' && (
+                    <div className="p-4">
+                      {signingProposal === proposal.id ? (
+                        <div className="space-y-3">
+                          <p className="text-xs text-zinc-500 font-medium">Type your full name to sign and accept this proposal.</p>
+                          <input
+                            type="text"
+                            value={signature}
+                            onChange={e => setSignature(e.target.value)}
+                            placeholder="Your full name"
+                            className="w-full border border-zinc-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-zinc-900 transition font-medium"
+                          />
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => acceptProposal(proposal.id)}
+                              disabled={!signature.trim() || signing}
+                              className="flex-1 bg-zinc-900 text-white py-3 rounded-xl text-sm font-bold disabled:opacity-40 transition hover:bg-zinc-700 cursor-pointer"
+                            >
+                              {signing ? 'Signing...' : 'Accept & Sign'}
+                            </button>
+                            <button
+                              onClick={() => { setSigningProposal(null); setSignature(''); }}
+                              className="px-4 py-3 border border-zinc-200 rounded-xl text-sm font-semibold text-zinc-600 hover:bg-zinc-50 transition cursor-pointer"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => setSigningProposal(proposal.id)}
+                          className="w-full bg-zinc-900 text-white py-3.5 rounded-xl text-sm font-bold hover:bg-zinc-700 transition cursor-pointer"
+                        >
+                          Review & Accept Proposal
+                        </button>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Already accepted */}
+                  {proposal.status === 'accepted' && (
+                    <div className="p-4 bg-emerald-50 flex items-center gap-2">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                      <p className="text-xs text-emerald-700 font-semibold">
+                        Accepted by {proposal.accepted_signature} on {new Date(proposal.accepted_at!).toLocaleDateString()}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              ))
+            )}
+          </div>
+        )}
 
       </div>
     </div>
