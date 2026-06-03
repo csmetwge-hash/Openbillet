@@ -5,33 +5,40 @@ const resend = new Resend(process.env.RESEND_API_KEY);
 
 export async function POST(req: Request) {
   try {
-    const { clientEmail, clientName, projectName, actionType, assetName } = await req.json();
+    const { clientEmail, clientName, projectName, actionType, assetName, portalToken } = await req.json();
 
     if (!clientEmail) {
-      return NextResponse.json({ error: 'Missing target parameters.' }, { status: 400 });
+      return NextResponse.json({ error: 'Missing clientEmail.' }, { status: 400 });
     }
 
-    // Build elegant, dark minimalistic monochromatic email layouts natively
+    const portalUrl = `${process.env.NEXT_PUBLIC_APP_URL}/portal/${portalToken}`;
+    const actionLine = actionType === 'file'
+      ? `New deliverable uploaded: <strong>${assetName}</strong>`
+      : `A new milestone has been assigned to your project roadmap.`;
+
     const emailHtml = `
-      <div style="background-color: #09090b; color: #f4f4f5; font-family: sans-serif; padding: 40px; border-radius: 16px; max-width: 600px; margin: 0 auto; border: 1px solid #27272a;">
-        <span style="font-size: 10px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.1em; color: #a1a1aa;">Workspace System Dispatch</span>
-        <h2 style="font-size: 18px; font-weight: 900; tracking: -0.02em; margin-top: 4px; color: #ffffff;">Action Required: ${projectName}</h2>
-        <p style="font-size: 13px; color: #d4d4d8; line-height: 1.6;">Hello ${clientName},</p>
-        <p style="font-size: 13px; color: #d4d4d8; line-height: 1.6;">Our operations engineering team has pushed an update to your workspace: <strong>${actionType === 'file' ? `New Asset Drop: ${assetName}` : `New Roadmap Milestone Assigned`}</strong>.</p>
-        <div style="margin-top: 32px; padding-top: 24px; border-t: 1px solid #18181b;">
-          <p style="font-size: 11px; color: #71717a;">This is an automated operational sync transmission. Please navigate to your secure magic client token dashboard link to review or sign off.</p>
-        </div>
+      <div style="background-color:#09090b;color:#f4f4f5;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;padding:40px;border-radius:16px;max-width:600px;margin:0 auto;border:1px solid #27272a;">
+        <p style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.12em;color:#71717a;margin:0 0 4px;">OpenBillet · Workspace Notification</p>
+        <h2 style="font-size:20px;font-weight:900;color:#ffffff;margin:0 0 24px;">${projectName}</h2>
+        <p style="font-size:14px;color:#d4d4d8;line-height:1.7;margin:0 0 12px;">Hello ${clientName},</p>
+        <p style="font-size:14px;color:#d4d4d8;line-height:1.7;margin:0 0 24px;">${actionLine}</p>
+        <a href="${portalUrl}" style="display:inline-block;background:#ffffff;color:#09090b;padding:14px 28px;border-radius:10px;font-weight:700;text-decoration:none;font-size:13px;">
+          View Your Portal →
+        </a>
+        <hr style="border:0;border-top:1px solid #27272a;margin:32px 0;" />
+        <p style="font-size:11px;color:#52525b;margin:0;">This is an automated notification from OpenBillet. Do not reply to this email.</p>
       </div>
     `;
 
     const data = await resend.emails.send({
-      from: 'Workspace Hub <onboarding@resend.dev>', // Upgrades to your custom domain parameters later
+      from: 'OpenBillet Notifications <notifications@openbillet.com>',
       to: clientEmail,
-      subject: `[Workspace Action Required] New Update Available for ${projectName}`,
+      subject: `[Action Required] ${projectName} — New Update`,
       html: emailHtml,
     });
 
     return NextResponse.json({ success: true, data }, { status: 200 });
+
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
