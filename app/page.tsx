@@ -12,6 +12,8 @@ import {
   ShieldCheck,
   MessageSquare,
   ChevronDown,
+  CreditCard,
+  Brush,
 } from 'lucide-react';
 
 export default function MarketingLandingPage() {
@@ -78,7 +80,17 @@ export default function MarketingLandingPage() {
       icon: <ShieldCheck className="w-5 h-5 text-white" />,
       title: 'Approval Gateways',
       description: 'Let clients sign off, accept deliverables, or request revisions in one click.'
-    }
+    },
+    {
+      icon: <CreditCard className="w-5 h-5 text-white" />,
+      title: 'Payment Link Integration',
+      description: 'Drop any payment link — Stripe, Square, PayPal, whatever you use — into a milestone and it renders as a live payment button inside the client portal. No invoice software needed.'
+    },
+    {
+      icon: <Brush className="w-5 h-5 text-white" />,
+      title: 'Full White-Label',
+      description: 'Every client portal carries your brand — your logo, your name. Clients never see OpenBillet. Deploy under your agency identity on every workspace, on every plan.'
+    },
   ];
 
   const faqs = [
