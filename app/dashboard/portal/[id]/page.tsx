@@ -3,316 +3,655 @@
 import React, { useEffect, useState, useRef, use } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, CheckCircle, FileIcon, MessageSquare, Send, Upload, Layers } from 'lucide-react';
+import {
+  ArrowLeft, CheckCircle, FileIcon, MessageSquare, Send, Upload,
+  Layers, Plus, ChevronDown, ChevronUp, Trash2, ExternalLink,
+  ClipboardList, User, Phone, MapPin, Tag, FileText, Edit3,
+  Copy, Check, MoreVertical, X,
+} from 'lucide-react';
 
-interface AdminPortalViewProps {
-  params: Promise<{ id: string }>;
-}
+type Tab = 'milestones' | 'files' | 'messages' | 'proposals' | 'crm';
 
-export default function AdminPortalWorkspace({ params }: AdminPortalViewProps) {
-  const unwrappedParams = use(params);
-  const portalId = unwrappedParams.id;
-
+export default function AdminPortalWorkspace({ params }: { params: Promise<{ id: string }> }) {
+  const { id: portalId } = use(params);
   const router = useRouter();
+
   const [portal, setPortal] = useState<any>(null);
   const [milestones, setMilestones] = useState<any[]>([]);
   const [files, setFiles] = useState<any[]>([]);
   const [notes, setNotes] = useState<any[]>([]);
-  
-  const [newMilestoneTitle, setNewMilestoneTitle] = useState('');
-  const [newMilestoneResp, setNewMilestoneResp] = useState('provider');
-  const [adminMessage, setAdminMessage] = useState('');
-  const [uploading, setUploading] = useState(false);
+  const [proposals, setProposals] = useState<any[]>([]);
+  const [activeTab, setActiveTab] = useState<Tab>('milestones');
   const [loading, setLoading] = useState(true);
+  const [copied, setCopied] = useState(false);
+
+  // Milestone form
+  const [newTitle, setNewTitle] = useState('');
+  const [newResp, setNewResp] = useState('provider');
+  const [newPayment, setNewPayment] = useState('');
+  const [showMilestoneForm, setShowMilestoneForm] = useState(false);
+
+  // Message
+  const [adminMessage, setAdminMessage] = useState('');
   const chatEndRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    fetchWorkspaceContext();
+  // File upload
+  const [uploading, setUploading] = useState(false);
 
+  // Proposal form
+  const [showProposalForm, setShowProposalForm] = useState(false);
+  const [proposalTitle, setProposalTitle] = useState('');
+  const [proposalBody, setProposalBody] = useState('');
+  const [lineItems, setLineItems] = useState([{ description: '', quantity: 1, unit_price: 0 }]);
+  const [savingProposal, setSavingProposal] = useState(false);
+
+  // CRM edit
+  const [editingCrm, setEditingCrm] = useState(false);
+  const [crmFields, setCrmFields] = useState({ client_phone: '', client_company: '', client_address: '', notes: '' });
+  const [savingCrm, setSavingCrm] = useState(false);
+
+  useEffect(() => {
+    fetchAll();
     const notesChannel = supabase
       .channel(`admin-notes-${portalId}`)
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'portal_notes', filter: `portal_id=eq.${portalId}` }, 
-        (payload) => setNotes(prev => [...prev, payload.new])
-      ).subscribe();
-
-    const filesChannel = supabase
-      .channel(`admin-files-${portalId}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'portal_files', filter: `portal_id=eq.${portalId}` }, 
-        () => fetchFiles(portalId)
-      ).subscribe();
-
-    return () => {
-      supabase.removeChannel(notesChannel);
-      supabase.removeChannel(filesChannel);
-    };
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'portal_notes', filter: `portal_id=eq.${portalId}` },
+        (payload) => setNotes(prev => [...prev, payload.new]))
+      .subscribe();
+    return () => { supabase.removeChannel(notesChannel); };
   }, [portalId]);
 
-  useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [notes]);
+  useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [notes]);
 
-  const fetchWorkspaceContext = async () => {
+  const fetchAll = async () => {
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-      router.push('/auth');
-      return;
-    }
+    if (!user) { router.push('/auth'); return; }
 
     const { data: portalData, error } = await supabase
-      .from('client_portals')
-      .select('*')
-      .eq('id', portalId)
-      .eq('user_id', user.id)
-      .single();
+      .from('client_portals').select('*').eq('id', portalId).eq('user_id', user.id).single();
 
-    if (error || !portalData) {
-      router.push('/dashboard');
-      return;
-    }
-
+    if (error || !portalData) { router.push('/dashboard'); return; }
     setPortal(portalData);
-    await Promise.all([
-      fetchMilestones(portalData.id), 
-      fetchFiles(portalData.id), 
-      fetchNotes(portalData.id)
+    setCrmFields({
+      client_phone: portalData.client_phone || '',
+      client_company: portalData.client_company || '',
+      client_address: portalData.client_address || '',
+      notes: portalData.notes || '',
+    });
+
+    const [ms, fs, ns, ps] = await Promise.all([
+      supabase.from('portal_milestones').select('*').eq('portal_id', portalData.id).order('created_at', { ascending: true }),
+      supabase.from('portal_files').select('*').eq('portal_id', portalData.id).order('created_at', { ascending: false }),
+      supabase.from('portal_notes').select('*').eq('portal_id', portalData.id).order('created_at', { ascending: true }),
+      supabase.from('portal_proposals').select('*, proposal_line_items(*)').eq('portal_id', portalData.id).order('created_at', { ascending: false }),
     ]);
+
+    setMilestones(ms.data || []);
+    setFiles(fs.data || []);
+    setNotes(ns.data || []);
+    setProposals((ps.data || []).map((p: any) => ({ ...p, line_items: p.proposal_line_items || [] })));
     setLoading(false);
   };
 
-  const fetchMilestones = async (pId: string) => {
-    const { data } = await supabase.from('portal_milestones').select('*').eq('portal_id', pId).order('created_at', { ascending: true });
+  const copyPortalLink = () => {
+    navigator.clipboard.writeText(`${window.location.origin}/portal/${portal.magic_token}`);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  // ── Milestones ───────────────────────────────────────────
+  const addMilestone = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newTitle.trim()) return;
+    await supabase.from('portal_milestones').insert({
+      portal_id: portal.id, title: newTitle, responsibility: newResp,
+      payment_request: newPayment || null, status: 'incomplete',
+    });
+    setNewTitle(''); setNewPayment(''); setShowMilestoneForm(false);
+    const { data } = await supabase.from('portal_milestones').select('*').eq('portal_id', portal.id).order('created_at', { ascending: true });
     setMilestones(data || []);
   };
 
-  const fetchFiles = async (pId: string) => {
-    const { data } = await supabase.from('portal_files').select('*').eq('portal_id', pId).order('created_at', { ascending: false });
-    setFiles(data || []);
+  const advanceMilestone = async (id: string, current: string) => {
+    const next: Record<string, string> = { incomplete: 'in_progress', in_progress: 'completed', completed: 'incomplete' };
+    await supabase.from('portal_milestones').update({ status: next[current] }).eq('id', id);
+    setMilestones(prev => prev.map(m => m.id === id ? { ...m, status: next[current] } : m));
   };
 
-  const fetchNotes = async (pId: string) => {
-    const { data } = await supabase.from('portal_notes').select('*').eq('portal_id', pId).order('created_at', { ascending: true });
-    setNotes(data || []);
+  const deleteMilestone = async (id: string) => {
+    await supabase.from('portal_milestones').delete().eq('id', id);
+    setMilestones(prev => prev.filter(m => m.id !== id));
   };
 
-  const uploadDeliverable = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  // ── Files ────────────────────────────────────────────────
+  const uploadFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !portal) return;
-
     setUploading(true);
-    const storagePath = `${portal.magic_token}/${Date.now()}-${file.name}`;
-
+    const path = `${portal.magic_token}/${Date.now()}-${file.name}`;
     try {
-      const { error: uploadError } = await supabase.storage
-        .from('portal-files')
-        .upload(storagePath, file);
-
-      if (uploadError) throw uploadError;
-
-      const { data: { user } } = await supabase.auth.getUser();
-
-      await supabase.from('portal_files').insert({
-        portal_id: portal.id,
-        file_name: file.name,
-        file_path: storagePath,
-        file_size: file.size,
-        uploaded_by: user?.id,
-        status: 'pending_review'
-      });
-
-      fetchFiles(portal.id);
-    } catch (err: any) {
-      alert(`Upload error logic hit: ${err.message}`);
-    } finally {
-      setUploading(false);
-    }
+      const { error } = await supabase.storage.from('portal-files').upload(path, file);
+      if (error) throw error;
+      await supabase.from('portal_files').insert({ portal_id: portal.id, file_name: file.name, file_path: path, status: 'pending_review' });
+      const { data } = await supabase.from('portal_files').select('*').eq('portal_id', portal.id).order('created_at', { ascending: false });
+      setFiles(data || []);
+    } catch (err: any) { alert(err.message); }
+    finally { setUploading(false); }
   };
 
-  const addMilestone = async (e: React.FormEvent) => {
+  // ── Messages ─────────────────────────────────────────────
+  const sendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newMilestoneTitle.trim() || !portal) return;
-
-    await supabase.from('portal_milestones').insert({
-      portal_id: portal.id,
-      title: newMilestoneTitle,
-      responsibility: newMilestoneResp,
-      status: 'incomplete'
-    });
-
-    setNewMilestoneTitle('');
-    fetchMilestones(portal.id);
-  };
-
-  const advanceMilestoneStatus = async (id: string, currentStatus: string) => {
-    const nextLookup: Record<string, string> = { incomplete: 'in_progress', in_progress: 'completed', completed: 'incomplete' };
-    await supabase.from('portal_milestones').update({ status: nextLookup[currentStatus] }).eq('id', id);
-    fetchMilestones(portal.id);
-  };
-
-  const sendAdminMessage = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!adminMessage.trim() || !portal) return;
-
-    await supabase.from('portal_notes').insert({
-      portal_id: portal.id,
-      message: adminMessage,
-      is_from_client: false
-    });
-
+    if (!adminMessage.trim()) return;
+    await supabase.from('portal_notes').insert({ portal_id: portal.id, message: adminMessage, is_from_client: false });
     setAdminMessage('');
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-zinc-50 flex items-center justify-center">
-        <div className="h-6 w-6 border-2 border-zinc-400 border-t-black rounded-full animate-spin" />
-      </div>
-    );
-  }
+  // ── Proposals ────────────────────────────────────────────
+  const totalAmount = lineItems.reduce((sum, item) => sum + (item.quantity * item.unit_price), 0);
+
+  const saveProposal = async (asDraft: boolean) => {
+    if (!proposalTitle.trim()) return;
+    setSavingProposal(true);
+    const { data: prop } = await supabase.from('portal_proposals').insert({
+      portal_id: portal.id, title: proposalTitle, body: proposalBody,
+      status: asDraft ? 'draft' : 'sent',
+      total_amount: totalAmount > 0 ? `$${totalAmount.toLocaleString()}` : null,
+    }).select().single();
+
+    if (prop && lineItems.some(i => i.description)) {
+      await supabase.from('proposal_line_items').insert(
+        lineItems.filter(i => i.description).map(i => ({ proposal_id: prop.id, ...i }))
+      );
+    }
+
+    setProposalTitle(''); setProposalBody('');
+    setLineItems([{ description: '', quantity: 1, unit_price: 0 }]);
+    setShowProposalForm(false); setSavingProposal(false);
+
+    const { data } = await supabase.from('portal_proposals').select('*, proposal_line_items(*)').eq('portal_id', portal.id).order('created_at', { ascending: false });
+    setProposals((data || []).map((p: any) => ({ ...p, line_items: p.proposal_line_items || [] })));
+  };
+
+  const sendProposal = async (id: string) => {
+    await supabase.from('portal_proposals').update({ status: 'sent' }).eq('id', id);
+    setProposals(prev => prev.map(p => p.id === id ? { ...p, status: 'sent' } : p));
+  };
+
+  // ── CRM ──────────────────────────────────────────────────
+  const saveCrm = async () => {
+    setSavingCrm(true);
+    await supabase.from('client_portals').update(crmFields).eq('id', portal.id);
+    setPortal((prev: any) => ({ ...prev, ...crmFields }));
+    setEditingCrm(false); setSavingCrm(false);
+  };
+
+  if (loading) return (
+    <div className="min-h-screen bg-zinc-50 flex items-center justify-center">
+      <div className="h-6 w-6 border-2 border-zinc-400 border-t-black rounded-full animate-spin" />
+    </div>
+  );
+
+  const tabs: { key: Tab; label: string; icon: React.ReactNode }[] = [
+    { key: 'milestones', label: 'Milestones', icon: <Layers className="w-4 h-4" /> },
+    { key: 'files', label: 'Files', icon: <FileIcon className="w-4 h-4" /> },
+    { key: 'messages', label: 'Messages', icon: <MessageSquare className="w-4 h-4" /> },
+    { key: 'proposals', label: 'Proposals', icon: <ClipboardList className="w-4 h-4" /> },
+    { key: 'crm', label: 'Client', icon: <User className="w-4 h-4" /> },
+  ];
 
   return (
-    <div className="min-h-screen bg-zinc-50 text-zinc-900 p-4 md:p-12 font-sans antialiased">
-      <div className="max-w-7xl mx-auto space-y-8">
-        
-        {/* Navigation Section */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-zinc-200">
-          <div className="flex items-center gap-4">
-            <button onClick={() => router.push('/dashboard')} className="p-2.5 bg-white border border-zinc-200 rounded-xl hover:bg-zinc-100 transition cursor-pointer">
+    <div className="min-h-screen bg-zinc-50 font-sans antialiased">
+
+      {/* ── Header ─────────────────────────────────────────── */}
+      <div className="bg-white border-b border-zinc-200 sticky top-0 z-40">
+        <div className="max-w-4xl mx-auto px-4 py-4 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3 min-w-0">
+            <button onClick={() => router.push('/dashboard')} className="p-2 bg-zinc-100 rounded-xl hover:bg-zinc-200 transition cursor-pointer shrink-0">
               <ArrowLeft className="w-4 h-4 text-zinc-600" />
             </button>
-            <div>
-              <h1 className="text-2xl font-black tracking-tight text-zinc-950">{portal.client_name}</h1>
-              <p className="text-xs text-zinc-500 font-semibold mt-0.5">Project Frame: <span className="text-zinc-800">{portal.project_name}</span></p>
+            <div className="min-w-0">
+              <h1 className="text-base font-black tracking-tight text-zinc-950 truncate">{portal.client_name}</h1>
+              <p className="text-[11px] text-zinc-500 font-medium truncate">{portal.project_name}</p>
             </div>
           </div>
-          <div className="bg-zinc-900 text-zinc-100 px-4 py-2 rounded-xl text-xs font-mono select-all shadow-xs border border-zinc-800">
-            Magic Slug: <span className="text-zinc-400 font-bold">{portal.magic_token}</span>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              onClick={copyPortalLink}
+              className="flex items-center gap-1.5 text-xs font-bold px-3 py-2 bg-zinc-900 text-white rounded-xl hover:bg-zinc-700 transition cursor-pointer"
+            >
+              {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+              <span className="hidden sm:inline">{copied ? 'Copied!' : 'Copy Link'}</span>
+            </button>
+            <button
+              onClick={() => window.open(`/portal/${portal.magic_token}`, '_blank')}
+              className="p-2 border border-zinc-200 rounded-xl hover:bg-zinc-50 transition cursor-pointer"
+            >
+              <ExternalLink className="w-4 h-4 text-zinc-500" />
+            </button>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-          
-          {/* Operations Layout Columns */}
-          <div className="lg:col-span-7 space-y-8">
-            
-            {/* File Upload Framework */}
-            <div className="bg-white border border-zinc-200 rounded-2xl p-6 shadow-2xs">
-              <h2 className="text-sm font-bold text-zinc-900 uppercase tracking-wider mb-4 flex items-center gap-2">
-                <Upload className="w-4 h-4 text-zinc-400" /> Deliverable Asset Inventory
-              </h2>
-              <label className={`border-2 border-dashed border-zinc-200 rounded-xl p-6 flex flex-col items-center justify-center cursor-pointer hover:bg-zinc-50 bg-zinc-50/20 transition ${uploading ? 'opacity-40 pointer-events-none' : ''}`}>
-                <p className="text-xs font-bold text-zinc-700">{uploading ? 'Processing drop...' : 'Select or drop project deliverables'}</p>
-                <input type="file" className="hidden" onChange={uploadDeliverable} disabled={uploading} />
-              </label>
+        {/* Tab nav */}
+        <div className="max-w-4xl mx-auto px-4">
+          <div className="flex gap-1 overflow-x-auto scrollbar-none pb-1">
+            {tabs.map(tab => (
+              <button
+                key={tab.key}
+                onClick={() => setActiveTab(tab.key)}
+                className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition cursor-pointer ${
+                  activeTab === tab.key ? 'bg-zinc-950 text-white' : 'text-zinc-500 hover:text-zinc-800 hover:bg-zinc-100'
+                }`}
+              >
+                {tab.icon}
+                {tab.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
 
-              <div className="mt-4 space-y-2">
-                {files.map((file) => (
-                  <div key={file.id} className="flex items-center justify-between p-3 border border-zinc-100 bg-zinc-50/40 rounded-xl">
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <FileIcon className="w-4 h-4 text-zinc-400 shrink-0" />
-                      <p className="text-xs font-semibold text-zinc-800 truncate pr-2">{file.file_name}</p>
-                    </div>
-                    <span className={`text-[9px] uppercase tracking-wider font-extrabold px-2 py-0.5 rounded ${file.status === 'approved_locked' ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}>
-                      {file.status === 'approved_locked' ? 'Approved' : 'Pending Review'}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
+      <div className="max-w-4xl mx-auto px-4 py-6 pb-24 space-y-4">
 
-            {/* Milestones Construction Form Card */}
-            <div className="bg-white border border-zinc-200 rounded-2xl p-6 shadow-2xs">
-              <h2 className="text-sm font-bold text-zinc-900 uppercase tracking-wider mb-4 flex items-center gap-2">
-                <Layers className="w-4 h-4 text-zinc-400" /> Project Milestones & Requirements
-              </h2>
+        {/* ── MILESTONES ─────────────────────────────────────── */}
+        {activeTab === 'milestones' && (
+          <>
+            <button
+              onClick={() => setShowMilestoneForm(!showMilestoneForm)}
+              className="w-full flex items-center justify-center gap-2 py-3 border-2 border-dashed border-zinc-300 rounded-2xl text-sm font-bold text-zinc-500 hover:border-zinc-400 hover:text-zinc-700 transition cursor-pointer"
+            >
+              <Plus className="w-4 h-4" /> Add Milestone
+            </button>
 
-              <form onSubmit={addMilestone} className="flex flex-col sm:flex-row gap-2 mb-6">
+            {showMilestoneForm && (
+              <div className="bg-white border border-zinc-200 rounded-2xl p-4 space-y-3">
                 <input
-                  type="text"
-                  required
-                  placeholder="e.g., Finalize architecture schema specification"
-                  value={newMilestoneTitle}
-                  onChange={(e) => setNewMilestoneTitle(e.target.value)}
-                  className="flex-1 border border-zinc-200 rounded-xl px-4 py-2 text-xs focus:outline-none focus:border-black bg-zinc-50/50 focus:bg-white transition"
+                  type="text" required placeholder="Milestone title"
+                  value={newTitle} onChange={e => setNewTitle(e.target.value)}
+                  className="w-full border border-zinc-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-zinc-900 transition"
+                />
+                <input
+                  type="text" placeholder="Payment amount or link (optional)"
+                  value={newPayment} onChange={e => setNewPayment(e.target.value)}
+                  className="w-full border border-zinc-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-zinc-900 transition"
                 />
                 <select
-                  value={newMilestoneResp}
-                  onChange={(e) => setNewMilestoneResp(e.target.value)}
-                  className="border border-zinc-200 rounded-xl px-3 py-2 text-xs bg-zinc-50 font-semibold text-zinc-700 focus:outline-none"
+                  value={newResp} onChange={e => setNewResp(e.target.value)}
+                  className="w-full border border-zinc-200 rounded-xl px-4 py-3 text-sm bg-white font-medium text-zinc-700 focus:outline-none"
                 >
-                  <option value="provider">Your Assignment</option>
-                  <option value="client">Client Action Item</option>
+                  <option value="provider">Your responsibility</option>
+                  <option value="client">Client responsibility</option>
                 </select>
-                <button type="submit" className="bg-zinc-950 hover:bg-zinc-800 text-white text-xs font-bold px-4 py-2 rounded-xl transition cursor-pointer">
-                  Add
-                </button>
-              </form>
+                <div className="flex gap-2">
+                  <button onClick={addMilestone as any} className="flex-1 bg-zinc-900 text-white py-3 rounded-xl text-sm font-bold hover:bg-zinc-700 transition cursor-pointer">
+                    Add Milestone
+                  </button>
+                  <button onClick={() => setShowMilestoneForm(false)} className="px-4 py-3 border border-zinc-200 rounded-xl text-sm font-semibold text-zinc-600 hover:bg-zinc-50 transition cursor-pointer">
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
 
-              <div className="space-y-2">
-                {milestones.map((m) => (
-                  <div key={m.id} className="flex items-center justify-between p-3.5 border border-zinc-100 rounded-xl bg-zinc-50/20">
-                    <div className="flex items-center gap-3">
-                      <button 
-                        onClick={() => advanceMilestoneStatus(m.id, m.status)}
-                        className={`w-4 h-4 rounded border flex items-center justify-center text-[10px] font-black transition cursor-pointer ${
-                          m.status === 'completed' ? 'bg-zinc-950 border-zinc-950 text-white' : 'border-zinc-300 hover:border-zinc-400 text-transparent'
-                        }`}
-                      >
-                        ✓
-                      </button>
-                      <div>
-                        <p className={`text-xs font-semibold ${m.status === 'completed' ? 'line-through text-zinc-400' : 'text-zinc-800'}`}>
-                          {m.title}
-                        </p>
-                        <span className="text-[9px] font-bold text-zinc-400 capitalize mt-0.5 block">{m.responsibility === 'client' ? 'Client action' : 'Your action'}</span>
-                      </div>
+            {milestones.length === 0 && !showMilestoneForm && (
+              <div className="text-center py-12 text-zinc-400">
+                <Layers className="w-8 h-8 mx-auto mb-2 opacity-30" />
+                <p className="text-sm font-medium">No milestones yet</p>
+              </div>
+            )}
+
+            {milestones.map(m => (
+              <div key={m.id} className={`bg-white border rounded-2xl p-4 transition ${m.status === 'completed' ? 'border-zinc-100 opacity-70' : 'border-zinc-200'}`}>
+                <div className="flex items-start gap-3">
+                  <button
+                    onClick={() => advanceMilestone(m.id, m.status)}
+                    className={`shrink-0 mt-0.5 w-6 h-6 rounded-full border-2 flex items-center justify-center transition cursor-pointer ${
+                      m.status === 'completed' ? 'bg-zinc-900 border-zinc-900' : m.status === 'in_progress' ? 'border-amber-400' : 'border-zinc-300 hover:border-zinc-500'
+                    }`}
+                  >
+                    {m.status === 'completed' && <Check className="w-3 h-3 text-white" />}
+                    {m.status === 'in_progress' && <div className="w-2 h-2 bg-amber-400 rounded-full" />}
+                  </button>
+                  <div className="flex-1 min-w-0">
+                    <p className={`text-sm font-semibold ${m.status === 'completed' ? 'line-through text-zinc-400' : 'text-zinc-900'}`}>{m.title}</p>
+                    <div className="flex items-center gap-2 mt-1 flex-wrap">
+                      <span className={`text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full ${
+                        m.status === 'completed' ? 'bg-emerald-50 text-emerald-600'
+                        : m.status === 'in_progress' ? 'bg-amber-50 text-amber-600'
+                        : 'bg-zinc-100 text-zinc-500'
+                      }`}>{m.status.replace('_', ' ')}</span>
+                      <span className="text-[10px] text-zinc-400 font-medium">{m.responsibility === 'client' ? 'Client' : 'You'}</span>
                     </div>
-                    <span className="text-[10px] font-mono capitalize px-2 py-0.5 rounded border bg-white text-zinc-500">
-                      {m.status.replace('_', ' ')}
+                    {m.payment_request && (
+                      <p className="text-xs text-zinc-500 mt-1.5 font-medium truncate">{m.payment_request}</p>
+                    )}
+                  </div>
+                  <button onClick={() => deleteMilestone(m.id)} className="shrink-0 p-1.5 text-zinc-300 hover:text-red-400 transition cursor-pointer rounded-lg hover:bg-red-50">
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </>
+        )}
+
+        {/* ── FILES ──────────────────────────────────────────── */}
+        {activeTab === 'files' && (
+          <>
+            <label className={`block w-full border-2 border-dashed border-zinc-300 rounded-2xl p-6 text-center cursor-pointer hover:border-zinc-400 transition ${uploading ? 'opacity-40 pointer-events-none' : ''}`}>
+              <Upload className="w-6 h-6 text-zinc-400 mx-auto mb-2" />
+              <p className="text-sm font-bold text-zinc-600">{uploading ? 'Uploading...' : 'Tap to upload file'}</p>
+              <p className="text-xs text-zinc-400 mt-1">Any file type</p>
+              <input type="file" className="hidden" onChange={uploadFile} disabled={uploading} />
+            </label>
+
+            {files.length === 0 && (
+              <div className="text-center py-12 text-zinc-400">
+                <FileIcon className="w-8 h-8 mx-auto mb-2 opacity-30" />
+                <p className="text-sm font-medium">No files yet</p>
+              </div>
+            )}
+
+            {files.map(file => (
+              <div key={file.id} className="bg-white border border-zinc-200 rounded-2xl p-4 flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="p-2 bg-zinc-100 rounded-xl shrink-0">
+                    <FileIcon className="w-4 h-4 text-zinc-500" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-zinc-900 truncate">{file.file_name}</p>
+                    <span className={`text-[10px] font-bold uppercase ${file.status === 'approved' ? 'text-emerald-600' : 'text-amber-600'}`}>
+                      {file.status === 'approved' ? 'Approved' : 'Pending Review'}
                     </span>
                   </div>
-                ))}
+                </div>
               </div>
-            </div>
+            ))}
+          </>
+        )}
 
-          </div>
-
-          {/* Secure Administrative Communications Channel (Chat Module) */}
-          <div className="lg:col-span-5">
-            <div className="bg-white border border-zinc-200 rounded-2xl shadow-2xs flex flex-col h-[520px] overflow-hidden">
-              <div className="p-4 border-b border-zinc-100 bg-zinc-50/60 flex items-center gap-2">
-                <MessageSquare className="w-4 h-4 text-zinc-400" />
-                <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-700">Client Communication Stream</h3>
-              </div>
-
-              <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-zinc-50/20">
-                {notes.map((n, idx) => (
-                  <div key={n.id || idx} className={`flex ${!n.is_from_client ? 'justify-end' : 'justify-start'}`}>
-                    <div className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-xs leading-relaxed shadow-3xs ${
-                      !n.is_from_client ? 'bg-zinc-900 text-white rounded-tr-none font-medium' : 'bg-white border border-zinc-200 text-zinc-900 rounded-tl-none'
-                    }`}>
-                      <p className="whitespace-pre-wrap">{n.message}</p>
-                    </div>
+        {/* ── MESSAGES ───────────────────────────────────────── */}
+        {activeTab === 'messages' && (
+          <div className="flex flex-col" style={{ minHeight: 'calc(100vh - 200px)' }}>
+            <div className="flex-1 space-y-3 pb-4">
+              {notes.length === 0 && (
+                <div className="text-center py-12 text-zinc-400">
+                  <MessageSquare className="w-8 h-8 mx-auto mb-2 opacity-30" />
+                  <p className="text-sm font-medium">No messages yet</p>
+                </div>
+              )}
+              {notes.map((n, i) => (
+                <div key={n.id || i} className={`flex ${!n.is_from_client ? 'justify-end' : 'justify-start'}`}>
+                  <div className={`max-w-[80%] px-4 py-3 rounded-2xl text-sm leading-relaxed ${
+                    !n.is_from_client ? 'bg-zinc-900 text-white rounded-br-sm' : 'bg-white border border-zinc-200 text-zinc-900 rounded-bl-sm'
+                  }`}>
+                    <p className="whitespace-pre-wrap">{n.message}</p>
+                    <p className="text-[10px] mt-1 text-zinc-400">
+                      {new Date(n.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </p>
                   </div>
-                ))}
-                <div ref={chatEndRef} />
-              </div>
-
-              <form onSubmit={sendAdminMessage} className="p-3 border-t border-zinc-100 flex gap-2 bg-white">
+                </div>
+              ))}
+              <div ref={chatEndRef} />
+            </div>
+            <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-zinc-200 p-3 z-50">
+              <form onSubmit={sendMessage} className="max-w-4xl mx-auto flex gap-2">
                 <input
-                  type="text"
-                  value={adminMessage}
-                  onChange={(e) => setAdminMessage(e.target.value)}
-                  placeholder="Type updates to client..."
-                  className="flex-1 bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-2 text-xs focus:outline-none focus:border-black focus:bg-white transition"
+                  type="text" value={adminMessage} onChange={e => setAdminMessage(e.target.value)}
+                  placeholder="Message client..."
+                  className="flex-1 bg-zinc-50 border border-zinc-200 rounded-2xl px-4 py-3 text-sm focus:outline-none focus:border-zinc-900 transition"
                 />
-                <button type="submit" disabled={!adminMessage.trim()} className="bg-zinc-950 hover:bg-zinc-800 disabled:opacity-40 text-white px-3 rounded-xl transition flex items-center justify-center cursor-pointer">
-                  <Send className="w-3.5 h-3.5" />
+                <button type="submit" disabled={!adminMessage.trim()} className="bg-zinc-900 text-white px-4 rounded-2xl disabled:opacity-40 hover:bg-zinc-700 transition cursor-pointer">
+                  <Send className="w-4 h-4" />
                 </button>
               </form>
             </div>
           </div>
+        )}
 
-        </div>
+        {/* ── PROPOSALS ──────────────────────────────────────── */}
+        {activeTab === 'proposals' && (
+          <>
+            <button
+              onClick={() => setShowProposalForm(!showProposalForm)}
+              className="w-full flex items-center justify-center gap-2 py-3 border-2 border-dashed border-zinc-300 rounded-2xl text-sm font-bold text-zinc-500 hover:border-zinc-400 hover:text-zinc-700 transition cursor-pointer"
+            >
+              <Plus className="w-4 h-4" /> New Proposal
+            </button>
+
+            {showProposalForm && (
+              <div className="bg-white border border-zinc-200 rounded-2xl p-4 space-y-4">
+                <h3 className="text-sm font-black text-zinc-900">New Proposal</h3>
+                <input
+                  type="text" placeholder="Proposal title"
+                  value={proposalTitle} onChange={e => setProposalTitle(e.target.value)}
+                  className="w-full border border-zinc-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-zinc-900 transition"
+                />
+                <textarea
+                  placeholder="Scope of work, terms, notes..."
+                  value={proposalBody} onChange={e => setProposalBody(e.target.value)}
+                  rows={4}
+                  className="w-full border border-zinc-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-zinc-900 transition resize-none"
+                />
+
+                {/* Line items */}
+                <div className="space-y-2">
+                  <p className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Line Items</p>
+                  {lineItems.map((item, i) => (
+                    <div key={i} className="grid grid-cols-12 gap-2 items-center">
+                      <input
+                        type="text" placeholder="Description"
+                        value={item.description}
+                        onChange={e => setLineItems(prev => prev.map((it, idx) => idx === i ? { ...it, description: e.target.value } : it))}
+                        className="col-span-6 border border-zinc-200 rounded-xl px-3 py-2.5 text-xs focus:outline-none focus:border-zinc-900 transition"
+                      />
+                      <input
+                        type="number" placeholder="Qty" min={1}
+                        value={item.quantity}
+                        onChange={e => setLineItems(prev => prev.map((it, idx) => idx === i ? { ...it, quantity: Number(e.target.value) } : it))}
+                        className="col-span-2 border border-zinc-200 rounded-xl px-2 py-2.5 text-xs focus:outline-none focus:border-zinc-900 transition text-center"
+                      />
+                      <input
+                        type="number" placeholder="Price" min={0}
+                        value={item.unit_price}
+                        onChange={e => setLineItems(prev => prev.map((it, idx) => idx === i ? { ...it, unit_price: Number(e.target.value) } : it))}
+                        className="col-span-3 border border-zinc-200 rounded-xl px-2 py-2.5 text-xs focus:outline-none focus:border-zinc-900 transition"
+                      />
+                      <button
+                        onClick={() => setLineItems(prev => prev.filter((_, idx) => idx !== i))}
+                        className="col-span-1 flex items-center justify-center text-zinc-300 hover:text-red-400 transition cursor-pointer"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ))}
+                  <button
+                    onClick={() => setLineItems(prev => [...prev, { description: '', quantity: 1, unit_price: 0 }])}
+                    className="text-xs font-bold text-zinc-500 hover:text-zinc-800 transition cursor-pointer flex items-center gap-1"
+                  >
+                    <Plus className="w-3.5 h-3.5" /> Add line item
+                  </button>
+                  {totalAmount > 0 && (
+                    <div className="flex justify-between items-center pt-2 border-t border-zinc-100">
+                      <span className="text-xs font-bold text-zinc-500">Total</span>
+                      <span className="text-base font-black text-zinc-900">${totalAmount.toLocaleString()}</span>
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex gap-2 pt-2">
+                  <button
+                    onClick={() => saveProposal(false)}
+                    disabled={!proposalTitle.trim() || savingProposal}
+                    className="flex-1 bg-zinc-900 text-white py-3 rounded-xl text-sm font-bold disabled:opacity-40 hover:bg-zinc-700 transition cursor-pointer"
+                  >
+                    {savingProposal ? 'Saving...' : 'Send to Client'}
+                  </button>
+                  <button
+                    onClick={() => saveProposal(true)}
+                    disabled={!proposalTitle.trim() || savingProposal}
+                    className="px-4 py-3 border border-zinc-200 rounded-xl text-sm font-semibold text-zinc-600 hover:bg-zinc-50 transition cursor-pointer"
+                  >
+                    Draft
+                  </button>
+                  <button
+                    onClick={() => setShowProposalForm(false)}
+                    className="px-4 py-3 border border-zinc-200 rounded-xl text-sm font-semibold text-zinc-600 hover:bg-zinc-50 transition cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {proposals.length === 0 && !showProposalForm && (
+              <div className="text-center py-12 text-zinc-400">
+                <ClipboardList className="w-8 h-8 mx-auto mb-2 opacity-30" />
+                <p className="text-sm font-medium">No proposals yet</p>
+              </div>
+            )}
+
+            {proposals.map(p => (
+              <div key={p.id} className="bg-white border border-zinc-200 rounded-2xl overflow-hidden">
+                <div className="p-4 flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-black text-zinc-900">{p.title}</p>
+                    {p.total_amount && <p className="text-lg font-black text-zinc-900 mt-0.5">{p.total_amount}</p>}
+                  </div>
+                  <span className={`shrink-0 text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-full ${
+                    p.status === 'accepted' ? 'bg-emerald-50 text-emerald-600'
+                    : p.status === 'draft' ? 'bg-zinc-100 text-zinc-500'
+                    : p.status === 'declined' ? 'bg-red-50 text-red-600'
+                    : 'bg-amber-50 text-amber-600'
+                  }`}>{p.status}</span>
+                </div>
+                {p.status === 'accepted' && (
+                  <div className="px-4 pb-4">
+                    <p className="text-xs text-emerald-600 font-semibold">
+                      ✓ Signed by {p.accepted_signature} · {new Date(p.accepted_at).toLocaleDateString()}
+                    </p>
+                  </div>
+                )}
+                {p.status === 'draft' && (
+                  <div className="px-4 pb-4">
+                    <button
+                      onClick={() => sendProposal(p.id)}
+                      className="text-xs font-bold text-zinc-900 underline cursor-pointer hover:text-zinc-600 transition"
+                    >
+                      Send to client →
+                    </button>
+                  </div>
+                )}
+              </div>
+            ))}
+          </>
+        )}
+
+        {/* ── CRM ────────────────────────────────────────────── */}
+        {activeTab === 'crm' && (
+          <div className="space-y-4">
+            <div className="bg-white border border-zinc-200 rounded-2xl p-4 space-y-1">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-sm font-black text-zinc-900">Client Info</h3>
+                <button
+                  onClick={() => editingCrm ? saveCrm() : setEditingCrm(true)}
+                  disabled={savingCrm}
+                  className="text-xs font-bold text-zinc-500 hover:text-zinc-900 transition cursor-pointer flex items-center gap-1"
+                >
+                  <Edit3 className="w-3.5 h-3.5" />
+                  {editingCrm ? (savingCrm ? 'Saving...' : 'Save') : 'Edit'}
+                </button>
+              </div>
+
+              {/* Read-only fields always shown */}
+              <div className="space-y-1 mb-4">
+                <div className="flex items-center gap-2 py-2 border-b border-zinc-50">
+                  <User className="w-4 h-4 text-zinc-300 shrink-0" />
+                  <span className="text-sm font-semibold text-zinc-900">{portal.client_name}</span>
+                </div>
+                {portal.client_email && (
+                  <div className="flex items-center gap-2 py-2 border-b border-zinc-50">
+                    <FileText className="w-4 h-4 text-zinc-300 shrink-0" />
+                    <span className="text-sm text-zinc-600">{portal.client_email}</span>
+                  </div>
+                )}
+              </div>
+
+              {editingCrm ? (
+                <div className="space-y-3">
+                  {[
+                    { label: 'Company', field: 'client_company', placeholder: 'ABC Landscaping' },
+                    { label: 'Phone', field: 'client_phone', placeholder: '+1 (555) 000-0000' },
+                    { label: 'Address', field: 'client_address', placeholder: '123 Main St, City, State' },
+                  ].map(({ label, field, placeholder }) => (
+                    <div key={field}>
+                      <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-1">{label}</label>
+                      <input
+                        type="text"
+                        placeholder={placeholder}
+                        value={(crmFields as any)[field]}
+                        onChange={e => setCrmFields(prev => ({ ...prev, [field]: e.target.value }))}
+                        className="w-full border border-zinc-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-zinc-900 transition"
+                      />
+                    </div>
+                  ))}
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-1">Internal Notes</label>
+                    <textarea
+                      rows={3}
+                      placeholder="Private notes about this client..."
+                      value={crmFields.notes}
+                      onChange={e => setCrmFields(prev => ({ ...prev, notes: e.target.value }))}
+                      className="w-full border border-zinc-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-zinc-900 transition resize-none"
+                    />
+                  </div>
+                  <button onClick={() => setEditingCrm(false)} className="text-xs text-zinc-400 hover:text-zinc-600 transition cursor-pointer">
+                    Cancel
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {[
+                    { icon: <Tag className="w-4 h-4 text-zinc-300" />, value: portal.client_company, label: 'Company' },
+                    { icon: <Phone className="w-4 h-4 text-zinc-300" />, value: portal.client_phone, label: 'Phone' },
+                    { icon: <MapPin className="w-4 h-4 text-zinc-300" />, value: portal.client_address, label: 'Address' },
+                  ].map(({ icon, value, label }) => value ? (
+                    <div key={label} className="flex items-center gap-2 py-2 border-b border-zinc-50">
+                      {icon}
+                      <span className="text-sm text-zinc-600">{value}</span>
+                    </div>
+                  ) : null)}
+                  {portal.notes && (
+                    <div className="pt-2">
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-1">Internal Notes</p>
+                      <p className="text-sm text-zinc-600 leading-relaxed">{portal.notes}</p>
+                    </div>
+                  )}
+                  {!portal.client_company && !portal.client_phone && !portal.client_address && !portal.notes && (
+                    <p className="text-sm text-zinc-400 py-2">No additional info. Tap Edit to add.</p>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Project summary card */}
+            <div className="bg-white border border-zinc-200 rounded-2xl p-4">
+              <h3 className="text-sm font-black text-zinc-900 mb-3">Project Summary</h3>
+              <div className="grid grid-cols-3 gap-3">
+                {[
+                  { label: 'Milestones', value: milestones.length },
+                  { label: 'Completed', value: milestones.filter(m => m.status === 'completed').length },
+                  { label: 'Files', value: files.length },
+                ].map(({ label, value }) => (
+                  <div key={label} className="bg-zinc-50 rounded-xl p-3 text-center">
+                    <p className="text-xl font-black text-zinc-900">{value}</p>
+                    <p className="text-[10px] text-zinc-500 font-medium mt-0.5">{label}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
       </div>
     </div>
   );
