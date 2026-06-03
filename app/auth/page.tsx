@@ -32,6 +32,8 @@ function AuthContent() {
       const { error } = await supabase.auth.signUp({ email, password });
       if (!error) {
         setMessage('Check your email to confirm your account.');
+        setEmail('');
+        setPassword('');
       } else {
         setMessage(error.message);
       }
