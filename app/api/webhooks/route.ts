@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { headers } from 'next/headers';
 import { stripe, PRICE_TIER_MAP } from '@/lib/stripe';
-import { supabaseAdmin } from '@/lib/supabase';
+import { supabaseAdmin } from '@/lib/supabase-admin';
 
 export const dynamic = 'force-dynamic';
 
@@ -39,7 +39,6 @@ export async function POST(req: Request) {
         return NextResponse.json({ error: 'Missing userId in metadata.' }, { status: 400 });
       }
 
-      // Resolve which price they bought → which tier
       const lineItems = await stripe.checkout.sessions.listLineItems(session.id);
       const priceId = lineItems.data[0]?.price?.id || '';
       const tier = PRICE_TIER_MAP[priceId] || 'standard';
@@ -67,7 +66,7 @@ export async function POST(req: Request) {
     if (eventType === 'customer.subscription.updated') {
       const customerId = session.customer as string;
       const subscriptionId = session.id as string;
-      const stripeStatus = session.status; // 'active', 'past_due', 'unpaid', etc.
+      const stripeStatus = session.status;
       const priceId = session.items?.data[0]?.price?.id || '';
       const tier = PRICE_TIER_MAP[priceId] || 'standard';
       const isActive = stripeStatus === 'active' || stripeStatus === 'trialing';
@@ -84,15 +83,13 @@ export async function POST(req: Request) {
         .eq('stripe_customer_id', customerId);
 
       if (error) throw error;
-      console.log(`🔄 Subscription updated — customer: ${customerId}, tier: ${tier}, status: ${stripeStatus}`);
+      console.log(`🔄 Subscription updated — customer: ${customerId}, tier: ${tier}`);
     }
 
     // ── CASE 3: Subscription cancelled ──────────────────────────────────────
     if (eventType === 'customer.subscription.deleted') {
       const customerId = session.customer as string;
 
-      // Set to 'none' — not 'free', not 'starter'. 
-      // Portal creation will block anyone without 'standard' or 'pro_unlimited'.
       const { error } = await supabaseAdmin
         .from('manager_subscriptions')
         .update({
