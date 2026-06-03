@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { supabaseAdmin } from '@/lib/supabase';
+import { supabaseAdmin } from '@/lib/supabase-admin';
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -54,7 +54,6 @@ export async function GET(request: Request) {
           });
         }
 
-        // Clear the escalation timer so it doesn't re-fire
         await supabaseAdmin
           .from('portal_milestones')
           .update({ deadline_escalation_at: null })
@@ -64,12 +63,7 @@ export async function GET(request: Request) {
       }
     }
 
-    return NextResponse.json({
-      success: true,
-      timestamp: now,
-      fired: logs.length,
-      details: logs,
-    });
+    return NextResponse.json({ success: true, timestamp: now, fired: logs.length, details: logs });
 
   } catch (err: any) {
     return NextResponse.json({ success: false, error: err.message }, { status: 500 });
