@@ -6,6 +6,8 @@ import { supabaseAdmin } from '@/lib/supabase-admin';
 export const dynamic = 'force-dynamic';
 
 export async function POST(req: Request) {
+  console.log('Webhook secret exists:', !!process.env.STRIPE_WEBHOOK_SECRET);
+  console.log('Signature header:', signature?.substring(0, 20));
   const body = await req.text();
   const headersList = await headers();
   const signature = headersList.get('stripe-signature');
