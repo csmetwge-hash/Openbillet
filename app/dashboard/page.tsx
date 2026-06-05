@@ -10,6 +10,12 @@ import {
 
 const STANDARD_PORTAL_LIMIT = 3;
 
+interface PortalMeta {
+  messageCount: number;
+  lastMessage: string | null;
+  hasProposalAction: boolean;
+}
+
 function UpgradeModal({ onClose, onUpgrade }: { onClose: () => void; onUpgrade: () => void }) {
   return (
     <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
@@ -50,7 +56,7 @@ function UpgradeModal({ onClose, onUpgrade }: { onClose: () => void; onUpgrade: 
 
 function DashboardContent() {
   const [portals, setPortals] = useState<any[]>([]);
-  const [portalMeta, setPortalMeta] = useState<Record<string, { messageCount: number; lastMessage: string | null }>>({});
+  const [portalMeta, setPortalMeta] = useState<Record<string, PortalMeta>>({});
   const [user, setUser] = useState<any>(null);
   const [subscription, setSubscription] = useState<{ tier_level: string; subscription_status: string } | null>(null);
   const [loading, setLoading] = useState(true);
@@ -86,20 +92,28 @@ function DashboardContent() {
     const portals = data || [];
     setPortals(portals);
 
-    // Fetch message counts and last message for each portal
     if (portals.length > 0) {
-      const meta: Record<string, { messageCount: number; lastMessage: string | null }> = {};
+      const meta: Record<string, PortalMeta> = {};
       await Promise.all(portals.map(async (p) => {
-        const { data: notes, count } = await supabase
-          .from('portal_notes')
-          .select('message, created_at', { count: 'exact' })
-          .eq('portal_id', p.id)
-          .eq('is_from_client', true)
-          .order('created_at', { ascending: false })
-          .limit(1);
+        const [notesRes, proposalsRes] = await Promise.all([
+          supabase
+            .from('portal_notes')
+            .select('message, created_at', { count: 'exact' })
+            .eq('portal_id', p.id)
+            .eq('is_from_client', true)
+            .order('created_at', { ascending: false })
+            .limit(1),
+          supabase
+            .from('portal_proposals')
+            .select('id')
+            .eq('portal_id', p.id)
+            .in('status', ['accepted', 'declined']),
+        ]);
+
         meta[p.id] = {
-          messageCount: count || 0,
-          lastMessage: notes?.[0]?.message || null,
+          messageCount: notesRes.count || 0,
+          lastMessage: notesRes.data?.[0]?.message || null,
+          hasProposalAction: (proposalsRes.data?.length || 0) > 0,
         };
       }));
       setPortalMeta(meta);
@@ -142,7 +156,7 @@ function DashboardContent() {
 
     if (!error && data) {
       setPortals(prev => [data, ...prev]);
-      setPortalMeta(prev => ({ ...prev, [data.id]: { messageCount: 0, lastMessage: null } }));
+      setPortalMeta(prev => ({ ...prev, [data.id]: { messageCount: 0, lastMessage: null, hasProposalAction: false } }));
     }
     setCreating(false);
   };
@@ -255,18 +269,28 @@ function DashboardContent() {
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {portals.map(p => {
                 const meta = portalMeta[p.id];
+                const hasAction = meta?.hasProposalAction || meta?.messageCount > 0;
                 return (
                   <div key={p.id} className="bg-white border border-zinc-200/80 rounded-2xl p-5 shadow-2xs flex flex-col justify-between hover:border-zinc-400 transition">
                     <div>
+                      {/* Card header */}
                       <div className="flex justify-between items-start mb-3">
                         <span className="text-[10px] uppercase font-black tracking-wider px-2 py-0.5 bg-emerald-50 text-emerald-700 rounded">
                           Active
                         </span>
-                        <button onClick={() => router.push(`/dashboard/portal/${p.id}`)}
-                          className="text-zinc-400 hover:text-black transition cursor-pointer" title="Open workspace">
-                          <LayoutGrid className="w-4 h-4" />
-                        </button>
+                        <div className="flex items-center gap-2">
+                          {hasAction && (
+                            <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 bg-amber-50 text-amber-600 rounded">
+                              Action needed
+                            </span>
+                          )}
+                          <button onClick={() => router.push(`/dashboard/portal/${p.id}`)}
+                            className="text-zinc-400 hover:text-black transition cursor-pointer" title="Open workspace">
+                            <LayoutGrid className="w-4 h-4" />
+                          </button>
+                        </div>
                       </div>
+
                       <h3 className="text-base font-bold tracking-tight text-zinc-950 truncate">{p.client_name}</h3>
                       <p className="text-xs font-semibold text-zinc-500 mt-0.5 truncate">{p.project_name}</p>
 
