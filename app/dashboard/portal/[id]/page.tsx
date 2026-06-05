@@ -7,10 +7,26 @@ import {
   ArrowLeft, FileIcon, MessageSquare, Send, Upload,
   Layers, Plus, Trash2, ExternalLink, ClipboardList,
   User, Phone, MapPin, Tag, FileText, Edit3,
-  Copy, Check, X,
+  Copy, Check, X, ChevronDown, ChevronUp,
 } from 'lucide-react';
 
-type Tab = 'milestones' | 'files' | 'messages' | 'proposals' | 'customer';
+type Tab = 'milestones' | 'files' | 'messages' | 'proposals' | 'crm';
+
+interface MilestoneForm {
+  title: string;
+  description: string;
+  amount: string;
+  payment_link: string;
+  responsibility: string;
+}
+
+const emptyForm: MilestoneForm = {
+  title: '',
+  description: '',
+  amount: '',
+  payment_link: '',
+  responsibility: 'provider',
+};
 
 export default function AdminPortalWorkspace({ params }: { params: Promise<{ id: string }> }) {
   const { id: portalId } = use(params);
@@ -25,11 +41,10 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState(false);
 
-  // Milestone form
-  const [newTitle, setNewTitle] = useState('');
-  const [newResp, setNewResp] = useState('provider');
-  const [newPayment, setNewPayment] = useState('');
+  // Milestone form (add + edit shared)
   const [showMilestoneForm, setShowMilestoneForm] = useState(false);
+  const [editingMilestoneId, setEditingMilestoneId] = useState<string | null>(null);
+  const [milestoneForm, setMilestoneForm] = useState<MilestoneForm>(emptyForm);
 
   // Message
   const [adminMessage, setAdminMessage] = useState('');
@@ -98,15 +113,50 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
     setTimeout(() => setCopied(false), 2000);
   };
 
-  // ── Milestones ───────────────────────────────────────────
-  const addMilestone = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newTitle.trim()) return;
-    await supabase.from('portal_milestones').insert({
-      portal_id: portal.id, title: newTitle, responsibility: newResp,
-      payment_request: newPayment || null, status: 'incomplete',
+  const updateForm = (field: keyof MilestoneForm, value: string) => {
+    setMilestoneForm(prev => ({ ...prev, [field]: value }));
+  };
+
+  const openAddForm = () => {
+    setEditingMilestoneId(null);
+    setMilestoneForm(emptyForm);
+    setShowMilestoneForm(true);
+  };
+
+  const openEditForm = (m: any) => {
+    setEditingMilestoneId(m.id);
+    setMilestoneForm({
+      title: m.title || '',
+      description: m.description || '',
+      amount: m.amount || '',
+      payment_link: m.payment_link || '',
+      responsibility: m.responsibility || 'provider',
     });
-    setNewTitle(''); setNewPayment(''); setShowMilestoneForm(false);
+    setShowMilestoneForm(true);
+  };
+
+  const saveMilestone = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!milestoneForm.title.trim()) return;
+
+    const payload = {
+      title: milestoneForm.title,
+      description: milestoneForm.description || null,
+      amount: milestoneForm.amount || null,
+      payment_link: milestoneForm.payment_link || null,
+      responsibility: milestoneForm.responsibility,
+    };
+
+    if (editingMilestoneId) {
+      await supabase.from('portal_milestones').update(payload).eq('id', editingMilestoneId);
+    } else {
+      await supabase.from('portal_milestones').insert({ ...payload, portal_id: portal.id, status: 'incomplete' });
+    }
+
+    setShowMilestoneForm(false);
+    setEditingMilestoneId(null);
+    setMilestoneForm(emptyForm);
+
     const { data } = await supabase.from('portal_milestones').select('*').eq('portal_id', portal.id).order('created_at', { ascending: true });
     setMilestones(data || []);
   };
@@ -118,6 +168,7 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
   };
 
   const deleteMilestone = async (id: string) => {
+    if (!confirm('Delete this milestone?')) return;
     await supabase.from('portal_milestones').delete().eq('id', id);
     setMilestones(prev => prev.filter(m => m.id !== id));
   };
@@ -196,7 +247,7 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
     { key: 'files', label: 'Files', icon: <FileIcon className="w-4 h-4" /> },
     { key: 'messages', label: 'Messages', icon: <MessageSquare className="w-4 h-4" /> },
     { key: 'proposals', label: 'Proposals', icon: <ClipboardList className="w-4 h-4" /> },
-    { key: 'customer', label: 'Customer', icon: <User className="w-4 h-4" /> },
+    { key: 'crm', label: 'Customer', icon: <User className="w-4 h-4" /> },
   ];
 
   return (
@@ -227,7 +278,6 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
           </div>
         </div>
 
-        {/* Tabs */}
         <div className="max-w-4xl mx-auto px-4">
           <div className="flex gap-1 overflow-x-auto scrollbar-none pb-1">
             {tabs.map(tab => (
@@ -247,29 +297,57 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
         {/* MILESTONES */}
         {activeTab === 'milestones' && (
           <>
-            <button onClick={() => setShowMilestoneForm(!showMilestoneForm)}
+            <button onClick={openAddForm}
               className="w-full flex items-center justify-center gap-2 py-3 border-2 border-dashed border-zinc-300 rounded-2xl text-sm font-bold text-zinc-500 hover:border-zinc-400 hover:text-zinc-700 transition cursor-pointer">
               <Plus className="w-4 h-4" /> Add Milestone
             </button>
 
             {showMilestoneForm && (
               <div className="bg-white border border-zinc-200 rounded-2xl p-4 space-y-3">
-                <input type="text" required placeholder="Milestone title"
-                  value={newTitle} onChange={e => setNewTitle(e.target.value)}
-                  className="w-full border border-zinc-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-zinc-900 transition" />
-                <input type="text" placeholder="Payment amount or link (optional)"
-                  value={newPayment} onChange={e => setNewPayment(e.target.value)}
-                  className="w-full border border-zinc-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-zinc-900 transition" />
-                <select value={newResp} onChange={e => setNewResp(e.target.value)}
-                  className="w-full border border-zinc-200 rounded-xl px-4 py-3 text-sm bg-white font-medium text-zinc-700 focus:outline-none">
-                  <option value="provider">Your responsibility</option>
-                  <option value="client">Client responsibility</option>
-                </select>
-                <div className="flex gap-2">
-                  <button onClick={addMilestone as any} className="flex-1 bg-zinc-900 text-white py-3 rounded-xl text-sm font-bold hover:bg-zinc-700 transition cursor-pointer">
-                    Add
+                <h3 className="text-sm font-black text-zinc-900">
+                  {editingMilestoneId ? 'Edit Milestone' : 'New Milestone'}
+                </h3>
+                <div>
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-1">Title <span className="text-red-400">*</span></label>
+                  <input type="text" placeholder="e.g. Initial site visit"
+                    value={milestoneForm.title} onChange={e => updateForm('title', e.target.value)}
+                    className="w-full border border-zinc-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-zinc-900 transition" />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-1">Description <span className="text-zinc-300">optional</span></label>
+                  <textarea placeholder="Additional details about this milestone..."
+                    value={milestoneForm.description} onChange={e => updateForm('description', e.target.value)}
+                    rows={2}
+                    className="w-full border border-zinc-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-zinc-900 transition resize-none" />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-1">Amount <span className="text-zinc-300">optional</span></label>
+                  <input type="text" placeholder="e.g. $1,500"
+                    value={milestoneForm.amount} onChange={e => updateForm('amount', e.target.value)}
+                    className="w-full border border-zinc-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-zinc-900 transition" />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-1">Payment Link <span className="text-zinc-300">optional</span></label>
+                  <input type="url" placeholder="https://buy.stripe.com/..."
+                    value={milestoneForm.payment_link} onChange={e => updateForm('payment_link', e.target.value)}
+                    className="w-full border border-zinc-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-zinc-900 transition" />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-1">Responsibility</label>
+                  <select value={milestoneForm.responsibility} onChange={e => updateForm('responsibility', e.target.value)}
+                    className="w-full border border-zinc-200 rounded-xl px-4 py-3 text-sm bg-white font-medium text-zinc-700 focus:outline-none">
+                    <option value="provider">Your responsibility</option>
+                    <option value="client">Customer responsibility</option>
+                  </select>
+                </div>
+                <div className="flex gap-2 pt-1">
+                  <button onClick={saveMilestone as any}
+                    disabled={!milestoneForm.title.trim()}
+                    className="flex-1 bg-zinc-900 text-white py-3 rounded-xl text-sm font-bold hover:bg-zinc-700 transition cursor-pointer disabled:opacity-40">
+                    {editingMilestoneId ? 'Save Changes' : 'Add Milestone'}
                   </button>
-                  <button onClick={() => setShowMilestoneForm(false)} className="px-4 py-3 border border-zinc-200 rounded-xl text-sm font-semibold text-zinc-600 hover:bg-zinc-50 transition cursor-pointer">
+                  <button onClick={() => { setShowMilestoneForm(false); setEditingMilestoneId(null); setMilestoneForm(emptyForm); }}
+                    className="px-4 py-3 border border-zinc-200 rounded-xl text-sm font-semibold text-zinc-600 hover:bg-zinc-50 transition cursor-pointer">
                     Cancel
                   </button>
                 </div>
@@ -297,21 +375,32 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
                   </button>
                   <div className="flex-1 min-w-0">
                     <p className={`text-sm font-semibold ${m.status === 'completed' ? 'line-through text-zinc-400' : 'text-zinc-900'}`}>{m.title}</p>
-                    <div className="flex items-center gap-2 mt-1 flex-wrap">
+                    {m.description && (
+                      <p className="text-xs text-zinc-500 mt-1 leading-relaxed">{m.description}</p>
+                    )}
+                    <div className="flex items-center gap-2 mt-1.5 flex-wrap">
                       <span className={`text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full ${
                         m.status === 'completed' ? 'bg-emerald-50 text-emerald-600'
                         : m.status === 'in_progress' ? 'bg-amber-50 text-amber-600'
                         : 'bg-zinc-100 text-zinc-500'
                       }`}>{m.status.replace('_', ' ')}</span>
-                      <span className="text-[10px] text-zinc-400">{m.responsibility === 'client' ? 'Client' : 'You'}</span>
+                      <span className="text-[10px] text-zinc-400">{m.responsibility === 'client' ? 'Customer' : 'You'}</span>
+                      {m.amount && <span className="text-[10px] font-bold text-zinc-600">{m.amount}</span>}
                     </div>
-                    {m.payment_request && (
-                      <p className="text-xs text-zinc-500 mt-1.5 truncate">{m.payment_request}</p>
+                    {m.payment_link && (
+                      <p className="text-xs text-zinc-400 mt-1 truncate">{m.payment_link}</p>
                     )}
                   </div>
-                  <button onClick={() => deleteMilestone(m.id)} className="shrink-0 p-1.5 text-zinc-300 hover:text-red-400 transition cursor-pointer rounded-lg hover:bg-red-50">
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <button onClick={() => openEditForm(m)}
+                      className="p-1.5 text-zinc-300 hover:text-zinc-600 transition cursor-pointer rounded-lg hover:bg-zinc-100">
+                      <Edit3 className="w-3.5 h-3.5" />
+                    </button>
+                    <button onClick={() => deleteMilestone(m.id)}
+                      className="p-1.5 text-zinc-300 hover:text-red-400 transition cursor-pointer rounded-lg hover:bg-red-50">
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                 </div>
               </div>
             ))}
@@ -376,7 +465,7 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
             <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-zinc-200 p-3 z-50">
               <form onSubmit={sendMessage} className="max-w-4xl mx-auto flex gap-2">
                 <input type="text" value={adminMessage} onChange={e => setAdminMessage(e.target.value)}
-                  placeholder="Message client..."
+                  placeholder="Message customer..."
                   className="flex-1 bg-zinc-50 border border-zinc-200 rounded-2xl px-4 py-3 text-sm focus:outline-none focus:border-zinc-900 transition" />
                 <button type="submit" disabled={!adminMessage.trim()}
                   className="bg-zinc-900 text-white px-4 rounded-2xl disabled:opacity-40 hover:bg-zinc-700 transition cursor-pointer">
@@ -406,18 +495,14 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
                   rows={4}
                   className="w-full border border-zinc-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-zinc-900 transition resize-none" />
 
-                {/* Line items — with labels */}
                 <div className="space-y-3">
                   <p className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Line Items</p>
-
-                  {/* Column headers */}
                   <div className="grid grid-cols-12 gap-2 px-1">
                     <span className="col-span-6 text-[10px] font-bold uppercase tracking-wider text-zinc-400">Description</span>
                     <span className="col-span-2 text-[10px] font-bold uppercase tracking-wider text-zinc-400 text-center">Qty</span>
                     <span className="col-span-3 text-[10px] font-bold uppercase tracking-wider text-zinc-400">Price ($)</span>
                     <span className="col-span-1" />
                   </div>
-
                   {lineItems.map((item, i) => (
                     <div key={i} className="grid grid-cols-12 gap-2 items-center">
                       <input type="text" placeholder="e.g. Lawn mowing"
@@ -438,12 +523,10 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
                       </button>
                     </div>
                   ))}
-
                   <button onClick={() => setLineItems(prev => [...prev, { description: '', quantity: 1, unit_price: 0 }])}
                     className="text-xs font-bold text-zinc-500 hover:text-zinc-800 transition cursor-pointer flex items-center gap-1">
                     <Plus className="w-3.5 h-3.5" /> Add line item
                   </button>
-
                   {totalAmount > 0 && (
                     <div className="flex justify-between items-center pt-3 border-t border-zinc-100">
                       <span className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Total</span>
@@ -456,7 +539,7 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
                   <button onClick={() => saveProposal(false)}
                     disabled={!proposalTitle.trim() || savingProposal}
                     className="flex-1 bg-zinc-900 text-white py-3 rounded-xl text-sm font-bold disabled:opacity-40 hover:bg-zinc-700 transition cursor-pointer">
-                    {savingProposal ? 'Saving...' : 'Send to Client'}
+                    {savingProposal ? 'Saving...' : 'Send to Customer'}
                   </button>
                   <button onClick={() => saveProposal(true)}
                     disabled={!proposalTitle.trim() || savingProposal}
@@ -501,14 +584,14 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
                 )}
                 {p.status === 'declined' && (
                   <div className="px-4 pb-4">
-                    <p className="text-xs text-red-500 font-semibold">Client declined this proposal.</p>
+                    <p className="text-xs text-red-500 font-semibold">Customer declined this proposal.</p>
                   </div>
                 )}
                 {p.status === 'draft' && (
                   <div className="px-4 pb-4">
                     <button onClick={() => sendProposal(p.id)}
                       className="text-xs font-bold text-zinc-900 underline cursor-pointer hover:text-zinc-600 transition">
-                      Send to client →
+                      Send to customer →
                     </button>
                   </div>
                 )}
@@ -517,8 +600,8 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
           </>
         )}
 
-        {/* CRM */}
-        {activeTab === 'customer' && (
+        {/* CUSTOMER (CRM) */}
+        {activeTab === 'crm' && (
           <div className="space-y-4">
             <div className="bg-white border border-zinc-200 rounded-2xl p-4">
               <div className="flex items-center justify-between mb-4">
@@ -546,9 +629,9 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
               {editingCrm ? (
                 <div className="space-y-3">
                   {[
-                    { label: 'Company / Name', field: 'client_company', placeholder: 'e.g. ABC Company or John Smith' },
+                    { label: 'Company / Name', field: 'client_company', placeholder: 'e.g. ABC Landscaping or John Smith' },
                     { label: 'Phone', field: 'client_phone', placeholder: 'e.g. 555-000-0000' },
-                    { label: 'Address', field: 'client_address', placeholder: 'e.g. 123 Main St, City, State, Zip' },
+                    { label: 'Address', field: 'client_address', placeholder: 'e.g. 123 Main St, Orlando FL' },
                   ].map(({ label, field, placeholder }) => (
                     <div key={field}>
                       <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-1">{label}</label>
@@ -560,7 +643,7 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
                   ))}
                   <div>
                     <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-1">Internal Notes</label>
-                    <textarea rows={3} placeholder="Private notes about this client..."
+                    <textarea rows={3} placeholder="Private notes about this customer..."
                       value={crmFields.notes}
                       onChange={e => setCrmFields(prev => ({ ...prev, notes: e.target.value }))}
                       className="w-full border border-zinc-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-zinc-900 transition resize-none" />
