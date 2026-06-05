@@ -5,7 +5,7 @@ import { supabase } from '@/lib/supabase';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
   Plus, Copy, ExternalLink, LogOut, CheckCircle2,
-  LayoutGrid, Users, CreditCard, X, Lock,
+  LayoutGrid, Users, CreditCard, X, Lock, MessageSquare,
 } from 'lucide-react';
 
 const STANDARD_PORTAL_LIMIT = 3;
@@ -34,16 +34,12 @@ function UpgradeModal({ onClose, onUpgrade }: { onClose: () => void; onUpgrade: 
           <div className="text-xs text-zinc-400">Unlimited portals · Full automation · White-labeled emails</div>
         </div>
         <div className="flex gap-3">
-          <button
-            onClick={onClose}
-            className="flex-1 bg-zinc-800 border border-zinc-700 text-zinc-300 text-xs font-bold py-3 rounded-xl hover:bg-zinc-700 transition cursor-pointer"
-          >
+          <button onClick={onClose}
+            className="flex-1 bg-zinc-800 border border-zinc-700 text-zinc-300 text-xs font-bold py-3 rounded-xl hover:bg-zinc-700 transition cursor-pointer">
             Maybe Later
           </button>
-          <button
-            onClick={onUpgrade}
-            className="flex-1 bg-white text-zinc-900 text-xs font-bold py-3 rounded-xl hover:bg-zinc-200 transition cursor-pointer"
-          >
+          <button onClick={onUpgrade}
+            className="flex-1 bg-white text-zinc-900 text-xs font-bold py-3 rounded-xl hover:bg-zinc-200 transition cursor-pointer">
             Upgrade to Pro →
           </button>
         </div>
@@ -54,6 +50,7 @@ function UpgradeModal({ onClose, onUpgrade }: { onClose: () => void; onUpgrade: 
 
 function DashboardContent() {
   const [portals, setPortals] = useState<any[]>([]);
+  const [portalMeta, setPortalMeta] = useState<Record<string, { messageCount: number; lastMessage: string | null }>>({});
   const [user, setUser] = useState<any>(null);
   const [subscription, setSubscription] = useState<{ tier_level: string; subscription_status: string } | null>(null);
   const [loading, setLoading] = useState(true);
@@ -65,20 +62,16 @@ function DashboardContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  useEffect(() => {
-    init();
-  }, []);
+  useEffect(() => { init(); }, []);
 
   const init = async () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { router.push('/auth'); return; }
     setUser(user);
-
     if (searchParams?.get('success') === 'true') {
       setShowSuccess(true);
       router.replace('/dashboard');
     }
-
     await Promise.all([fetchPortals(user.id), fetchSubscription(user.id)]);
     setLoading(false);
   };
@@ -90,7 +83,27 @@ function DashboardContent() {
       .eq('user_id', userId)
       .eq('status', 'active')
       .order('created_at', { ascending: false });
-    setPortals(data || []);
+    const portals = data || [];
+    setPortals(portals);
+
+    // Fetch message counts and last message for each portal
+    if (portals.length > 0) {
+      const meta: Record<string, { messageCount: number; lastMessage: string | null }> = {};
+      await Promise.all(portals.map(async (p) => {
+        const { data: notes, count } = await supabase
+          .from('portal_notes')
+          .select('message, created_at', { count: 'exact' })
+          .eq('portal_id', p.id)
+          .eq('is_from_client', true)
+          .order('created_at', { ascending: false })
+          .limit(1);
+        meta[p.id] = {
+          messageCount: count || 0,
+          lastMessage: notes?.[0]?.message || null,
+        };
+      }));
+      setPortalMeta(meta);
+    }
   };
 
   const fetchSubscription = async (userId: string) => {
@@ -102,60 +115,40 @@ function DashboardContent() {
     setSubscription(data);
   };
 
-  // ── Tier enforcement ─────────────────────────────────────────────────────
   const tier = subscription?.tier_level || 'none';
   const isSubscriptionActive = subscription?.subscription_status === 'active';
   const isPro = tier === 'pro_unlimited' && isSubscriptionActive;
   const isStandard = tier === 'standard' && isSubscriptionActive;
   const activeCount = portals.length;
   const atLimit = isStandard && activeCount >= STANDARD_PORTAL_LIMIT;
-  const canCreate = (isPro || isStandard) && !atLimit;
 
   const createNewPortal = async () => {
     if (!user) return;
-
-    // Block if no active subscription
-    if (!isSubscriptionActive) {
-      router.push('/pricing');
-      return;
-    }
-
-    // Block Standard users at limit
-    if (atLimit) {
-      setShowUpgradeModal(true);
-      return;
-    }
+    if (!isSubscriptionActive) { router.push('/pricing'); return; }
+    if (atLimit) { setShowUpgradeModal(true); return; }
 
     setCreating(true);
     const clientName = prompt('Enter client company name:');
     if (!clientName) { setCreating(false); return; }
-    const projectName = prompt('Enter project identifier (e.g., Q3 Web Deployment):') || 'General Engagement';
+    const projectName = prompt('Enter project name:') || 'General Engagement';
 
     const magicToken = Array.from(crypto.getRandomValues(new Uint8Array(16)))
-      .map(b => b.toString(16).padStart(2, '0'))
-      .join('');
+      .map(b => b.toString(16).padStart(2, '0')).join('');
 
     const { data, error } = await supabase
       .from('client_portals')
-      .insert({
-        user_id: user.id,
-        client_name: clientName,
-        project_name: projectName,
-        magic_token: magicToken,
-        status: 'active',
-      })
-      .select()
-      .single();
+      .insert({ user_id: user.id, client_name: clientName, project_name: projectName, magic_token: magicToken, status: 'active' })
+      .select().single();
 
     if (!error && data) {
       setPortals(prev => [data, ...prev]);
+      setPortalMeta(prev => ({ ...prev, [data.id]: { messageCount: 0, lastMessage: null } }));
     }
     setCreating(false);
   };
 
   const copyLink = (token: string, id: string) => {
-    const url = `${window.location.origin}/portal/${token}`;
-    navigator.clipboard.writeText(url);
+    navigator.clipboard.writeText(`${window.location.origin}/portal/${token}`);
     setCopiedId(id);
     setTimeout(() => setCopiedId(null), 2000);
   };
@@ -165,68 +158,54 @@ function DashboardContent() {
     router.push('/auth');
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-zinc-50 flex items-center justify-center">
-        <div className="h-6 w-6 border-2 border-zinc-400 border-t-black rounded-full animate-spin" />
-      </div>
-    );
-  }
+  if (loading) return (
+    <div className="min-h-screen bg-zinc-50 flex items-center justify-center">
+      <div className="h-6 w-6 border-2 border-zinc-400 border-t-black rounded-full animate-spin" />
+    </div>
+  );
 
   return (
     <>
       {showUpgradeModal && (
-        <UpgradeModal
-          onClose={() => setShowUpgradeModal(false)}
-          onUpgrade={() => router.push('/billing')}
-        />
+        <UpgradeModal onClose={() => setShowUpgradeModal(false)} onUpgrade={() => router.push('/billing')} />
       )}
 
-      <div className="min-h-screen bg-zinc-50/50 p-6 md:p-12 font-sans antialiased">
-        <div className="max-w-7xl mx-auto space-y-10">
+      <div className="min-h-screen bg-zinc-50/50 p-4 md:p-12 font-sans antialiased">
+        <div className="max-w-7xl mx-auto space-y-8">
 
-          {/* Success banner */}
           {showSuccess && (
-            <div className="bg-emerald-50 border border-emerald-200 text-emerald-900 p-4 rounded-2xl flex items-center gap-3 shadow-xs">
+            <div className="bg-emerald-50 border border-emerald-200 text-emerald-900 p-4 rounded-2xl flex items-center gap-3">
               <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
               <div className="text-sm font-semibold">Subscription activated. Your workspace is ready.</div>
             </div>
           )}
 
-          {/* No subscription banner */}
           {!isSubscriptionActive && (
             <div className="bg-amber-50 border border-amber-200 text-amber-900 p-4 rounded-2xl flex items-center justify-between gap-3">
               <div className="text-sm font-semibold">No active plan. Subscribe to start creating client portals.</div>
-              <button
-                onClick={() => router.push('/pricing')}
-                className="text-xs font-bold uppercase tracking-wider bg-amber-900 text-white px-4 py-2 rounded-xl hover:bg-amber-800 transition cursor-pointer whitespace-nowrap"
-              >
+              <button onClick={() => router.push('/pricing')}
+                className="text-xs font-bold uppercase tracking-wider bg-amber-900 text-white px-4 py-2 rounded-xl hover:bg-amber-800 transition cursor-pointer whitespace-nowrap">
                 View Plans
               </button>
             </div>
           )}
 
-          {/* Standard limit warning */}
           {isStandard && activeCount >= STANDARD_PORTAL_LIMIT && (
             <div className="bg-zinc-100 border border-zinc-200 text-zinc-700 p-4 rounded-2xl flex items-center justify-between gap-3">
-              <div className="text-sm font-semibold">
-                {activeCount}/{STANDARD_PORTAL_LIMIT} portals used. Upgrade to Pro for unlimited.
-              </div>
-              <button
-                onClick={() => router.push('/billing')}
-                className="text-xs font-bold uppercase tracking-wider bg-zinc-900 text-white px-4 py-2 rounded-xl hover:bg-zinc-700 transition cursor-pointer whitespace-nowrap"
-              >
+              <div className="text-sm font-semibold">{activeCount}/{STANDARD_PORTAL_LIMIT} portals used. Upgrade to Pro for unlimited.</div>
+              <button onClick={() => router.push('/billing')}
+                className="text-xs font-bold uppercase tracking-wider bg-zinc-900 text-white px-4 py-2 rounded-xl hover:bg-zinc-700 transition cursor-pointer whitespace-nowrap">
                 Upgrade
               </button>
             </div>
           )}
 
-          {/* Nav header */}
+          {/* Header */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-zinc-200">
             <div>
               <h1 className="text-2xl font-black tracking-tight text-zinc-950">Workspace Console</h1>
               <p className="text-sm font-medium text-zinc-500 mt-0.5">
-                Signed in as <span className="text-zinc-800 font-bold">{user?.email}</span>
+                {user?.email}
                 {isSubscriptionActive && (
                   <span className={`ml-2 text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded ${isPro ? 'bg-zinc-900 text-white' : 'bg-zinc-100 text-zinc-600'}`}>
                     {isPro ? 'Pro' : 'Standard'}
@@ -235,29 +214,18 @@ function DashboardContent() {
               </p>
             </div>
             <div className="flex items-center gap-2">
-              <button
-                onClick={createNewPortal}
-                disabled={creating || !isSubscriptionActive}
-                className="bg-zinc-950 hover:bg-zinc-800 disabled:opacity-40 text-white text-sm font-semibold px-4 py-2.5 rounded-xl transition shadow-xs flex items-center gap-2 cursor-pointer"
-              >
+              <button onClick={createNewPortal} disabled={creating || !isSubscriptionActive}
+                className="bg-zinc-950 hover:bg-zinc-800 disabled:opacity-40 text-white text-sm font-semibold px-4 py-2.5 rounded-xl transition flex items-center gap-2 cursor-pointer">
                 <Plus className="w-4 h-4" />
                 {creating ? 'Creating...' : 'New Portal'}
-                {isStandard && (
-                  <span className="text-zinc-400 font-normal text-xs">({activeCount}/{STANDARD_PORTAL_LIMIT})</span>
-                )}
+                {isStandard && <span className="text-zinc-400 font-normal text-xs">({activeCount}/{STANDARD_PORTAL_LIMIT})</span>}
               </button>
-              <button
-                onClick={() => router.push('/billing')}
-                className="bg-white hover:bg-zinc-100 text-zinc-700 border border-zinc-200 p-2.5 rounded-xl transition cursor-pointer"
-                title="Billing"
-              >
+              <button onClick={() => router.push('/billing')}
+                className="bg-white hover:bg-zinc-100 text-zinc-700 border border-zinc-200 p-2.5 rounded-xl transition cursor-pointer" title="Billing">
                 <CreditCard className="w-4 h-4" />
               </button>
-              <button
-                onClick={handleLogout}
-                className="bg-white hover:bg-zinc-100 text-zinc-700 border border-zinc-200 p-2.5 rounded-xl transition cursor-pointer"
-                title="Logout"
-              >
+              <button onClick={handleLogout}
+                className="bg-white hover:bg-zinc-100 text-zinc-700 border border-zinc-200 p-2.5 rounded-xl transition cursor-pointer" title="Logout">
                 <LogOut className="w-4 h-4" />
               </button>
             </div>
@@ -270,64 +238,69 @@ function DashboardContent() {
                 <Users className="w-6 h-6 text-zinc-400" />
               </div>
               <p className="text-base font-bold text-zinc-900">No portals yet</p>
-              <p className="text-xs text-zinc-500 font-medium max-w-xs mx-auto mt-1 mb-6">
-                Create your first client workspace to get started.
-              </p>
+              <p className="text-xs text-zinc-500 font-medium max-w-xs mx-auto mt-1 mb-6">Create your first client workspace to get started.</p>
               {isSubscriptionActive ? (
-                <button
-                  onClick={createNewPortal}
-                  disabled={creating}
-                  className="bg-zinc-950 hover:bg-zinc-800 text-white text-xs font-bold px-5 py-3 rounded-xl transition cursor-pointer disabled:opacity-50"
-                >
+                <button onClick={createNewPortal} disabled={creating}
+                  className="bg-zinc-950 hover:bg-zinc-800 text-white text-xs font-bold px-5 py-3 rounded-xl transition cursor-pointer disabled:opacity-50">
                   Create First Portal
                 </button>
               ) : (
-                <button
-                  onClick={() => router.push('/pricing')}
-                  className="bg-zinc-950 hover:bg-zinc-800 text-white text-xs font-bold px-5 py-3 rounded-xl transition cursor-pointer"
-                >
+                <button onClick={() => router.push('/pricing')}
+                  className="bg-zinc-950 hover:bg-zinc-800 text-white text-xs font-bold px-5 py-3 rounded-xl transition cursor-pointer">
                   View Pricing Plans
                 </button>
               )}
             </div>
           ) : (
-            <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-              {portals.map((p) => (
-                <div key={p.id} className="bg-white border border-zinc-200/80 rounded-2xl p-6 shadow-2xs flex flex-col justify-between hover:border-zinc-400 transition">
-                  <div>
-                    <div className="flex justify-between items-start mb-4">
-                      <span className="text-[10px] uppercase font-black tracking-wider px-2 py-0.5 bg-emerald-50 text-emerald-700 rounded">
-                        Active
-                      </span>
-                      <button
-                        onClick={() => router.push(`/dashboard/portal/${p.id}`)}
-                        className="text-zinc-400 hover:text-black transition cursor-pointer"
-                        title="Open workspace"
-                      >
-                        <LayoutGrid className="w-4 h-4" />
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {portals.map(p => {
+                const meta = portalMeta[p.id];
+                return (
+                  <div key={p.id} className="bg-white border border-zinc-200/80 rounded-2xl p-5 shadow-2xs flex flex-col justify-between hover:border-zinc-400 transition">
+                    <div>
+                      <div className="flex justify-between items-start mb-3">
+                        <span className="text-[10px] uppercase font-black tracking-wider px-2 py-0.5 bg-emerald-50 text-emerald-700 rounded">
+                          Active
+                        </span>
+                        <button onClick={() => router.push(`/dashboard/portal/${p.id}`)}
+                          className="text-zinc-400 hover:text-black transition cursor-pointer" title="Open workspace">
+                          <LayoutGrid className="w-4 h-4" />
+                        </button>
+                      </div>
+                      <h3 className="text-base font-bold tracking-tight text-zinc-950 truncate">{p.client_name}</h3>
+                      <p className="text-xs font-semibold text-zinc-500 mt-0.5 truncate">{p.project_name}</p>
+
+                      {/* Message snapshot */}
+                      {meta?.lastMessage && (
+                        <button
+                          onClick={() => router.push(`/dashboard/portal/${p.id}`)}
+                          className="mt-3 w-full text-left bg-zinc-50 border border-zinc-100 rounded-xl p-3 hover:bg-zinc-100 transition cursor-pointer"
+                        >
+                          <div className="flex items-center gap-1.5 mb-1">
+                            <MessageSquare className="w-3 h-3 text-zinc-400" />
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">
+                              Client message{meta.messageCount > 1 ? ` · ${meta.messageCount}` : ''}
+                            </span>
+                          </div>
+                          <p className="text-xs text-zinc-600 font-medium truncate">{meta.lastMessage}</p>
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="mt-4 pt-4 border-t border-zinc-100 flex gap-2">
+                      <button onClick={() => copyLink(p.magic_token, p.id)}
+                        className="flex-1 bg-zinc-50 hover:bg-zinc-100 text-zinc-800 border border-zinc-200 text-xs font-bold py-2.5 rounded-xl transition flex items-center justify-center gap-1.5 cursor-pointer">
+                        <Copy className="w-3.5 h-3.5" />
+                        {copiedId === p.id ? 'Copied!' : 'Copy Link'}
+                      </button>
+                      <button onClick={() => window.open(`/portal/${p.magic_token}`, '_blank')}
+                        className="bg-white hover:bg-zinc-50 border border-zinc-200 text-zinc-700 p-2.5 rounded-xl transition cursor-pointer" title="Preview portal">
+                        <ExternalLink className="w-3.5 h-3.5" />
                       </button>
                     </div>
-                    <h3 className="text-lg font-bold tracking-tight text-zinc-950 truncate">{p.client_name}</h3>
-                    <p className="text-xs font-semibold text-zinc-500 mt-0.5 truncate">{p.project_name}</p>
                   </div>
-                  <div className="mt-8 pt-4 border-t border-zinc-100 flex gap-2">
-                    <button
-                      onClick={() => copyLink(p.magic_token, p.id)}
-                      className="flex-1 bg-zinc-50 hover:bg-zinc-100 text-zinc-800 border border-zinc-200 text-xs font-bold py-2.5 rounded-xl transition flex items-center justify-center gap-1.5 cursor-pointer"
-                    >
-                      <Copy className="w-3.5 h-3.5" />
-                      {copiedId === p.id ? 'Copied!' : 'Copy Link'}
-                    </button>
-                    <button
-                      onClick={() => window.open(`/portal/${p.magic_token}`, '_blank')}
-                      className="bg-white hover:bg-zinc-50 border border-zinc-200 text-zinc-700 p-2.5 rounded-xl transition cursor-pointer"
-                      title="Preview client portal"
-                    >
-                      <ExternalLink className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
