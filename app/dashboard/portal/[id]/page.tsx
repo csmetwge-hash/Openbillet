@@ -10,7 +10,7 @@ import {
   Copy, Check, X,
 } from 'lucide-react';
 
-type Tab = 'milestones' | 'files' | 'messages' | 'proposals' | 'crm';
+type Tab = 'milestones' | 'files' | 'messages' | 'proposals' | 'customer';
 
 export default function AdminPortalWorkspace({ params }: { params: Promise<{ id: string }> }) {
   const { id: portalId } = use(params);
@@ -196,7 +196,7 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
     { key: 'files', label: 'Files', icon: <FileIcon className="w-4 h-4" /> },
     { key: 'messages', label: 'Messages', icon: <MessageSquare className="w-4 h-4" /> },
     { key: 'proposals', label: 'Proposals', icon: <ClipboardList className="w-4 h-4" /> },
-    { key: 'crm', label: 'Client', icon: <User className="w-4 h-4" /> },
+    { key: 'customer', label: 'Customer', icon: <User className="w-4 h-4" /> },
   ];
 
   return (
@@ -518,11 +518,11 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
         )}
 
         {/* CRM */}
-        {activeTab === 'crm' && (
+        {activeTab === 'customer' && (
           <div className="space-y-4">
             <div className="bg-white border border-zinc-200 rounded-2xl p-4">
               <div className="flex items-center justify-between mb-4">
-                <h3 className="text-sm font-black text-zinc-900">Client Info</h3>
+                <h3 className="text-sm font-black text-zinc-900">Customer Details</h3>
                 <button onClick={() => editingCrm ? saveCrm() : setEditingCrm(true)} disabled={savingCrm}
                   className="text-xs font-bold text-zinc-500 hover:text-zinc-900 transition cursor-pointer flex items-center gap-1">
                   <Edit3 className="w-3.5 h-3.5" />
@@ -546,9 +546,9 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
               {editingCrm ? (
                 <div className="space-y-3">
                   {[
-                    { label: 'Company', field: 'client_company', placeholder: 'ABC Landscaping' },
-                    { label: 'Phone', field: 'client_phone', placeholder: '+1 (555) 000-0000' },
-                    { label: 'Address', field: 'client_address', placeholder: '123 Main St, City, State' },
+                    { label: 'Company / Name', field: 'client_company', placeholder: 'e.g. ABC Company or John Smith' },
+                    { label: 'Phone', field: 'client_phone', placeholder: 'e.g. 555-000-0000' },
+                    { label: 'Address', field: 'client_address', placeholder: 'e.g. 123 Main St, City, State, Zip' },
                   ].map(({ label, field, placeholder }) => (
                     <div key={field}>
                       <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-1">{label}</label>
