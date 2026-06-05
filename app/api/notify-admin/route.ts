@@ -58,7 +58,7 @@ export async function POST(req: Request) {
     `;
 
     await resend.emails.send({
-      from: 'OpenBillet Notifications <notifications@openbillet.com>',
+      from: 'OpenBillet <onboarding@resend.dev>',
       to: managerEmail,
       subject: subjects[actionType] || `New activity on ${projectName}`,
       html: emailHtml,
