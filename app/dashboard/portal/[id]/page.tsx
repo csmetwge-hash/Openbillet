@@ -49,6 +49,7 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
   // Message
   const [adminMessage, setAdminMessage] = useState('');
   const chatEndRef = useRef<HTMLDivElement>(null);
+  const pageTopRef = useRef<HTMLDivElement>(null);
 
   // File upload
   const [uploading, setUploading] = useState(false);
@@ -133,6 +134,7 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
       responsibility: m.responsibility || 'provider',
     });
     setShowMilestoneForm(true);
+    pageTopRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
   const saveMilestone = async (e: React.FormEvent) => {
@@ -251,7 +253,7 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
   ];
 
   return (
-    <div className="min-h-screen bg-zinc-50 font-sans antialiased">
+    <div ref={pageTopRef} className="min-h-screen bg-zinc-50 font-sans antialiased">
 
       {/* Header */}
       <div className="bg-white border-b border-zinc-200 sticky top-0 z-40">
