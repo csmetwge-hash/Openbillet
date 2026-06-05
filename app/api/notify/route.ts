@@ -31,7 +31,7 @@ export async function POST(req: Request) {
     `;
 
     const data = await resend.emails.send({
-      from: 'OpenBillet Notifications <notifications@openbillet.com>',
+      from: 'OpenBillet <onboarding@resend.dev>',
       to: clientEmail,
       subject: `[Action Required] ${projectName} — New Update`,
       html: emailHtml,
