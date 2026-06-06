@@ -112,6 +112,20 @@ export default function ClientPortal({ params }: { params: Promise<{ token: stri
     if (error || !portalData) { setNotFound(true); setLoading(false); return; }
     setPortal(portalData);
 
+    // Fall back to account-level brand settings if portal has no brand
+    if (!portalData.brand_name && !portalData.brand_logo_url) {
+      const { data: settings } = await supabase
+        .from('account_settings')
+        .select('brand_name, brand_logo_url')
+        .eq('user_id', portalData.user_id)
+        .maybeSingle();
+
+      if (settings) {
+        portalData.brand_name = settings.brand_name;
+        portalData.brand_logo_url = settings.brand_logo_url;
+      }
+    }
+
     const [ms, fs, ns, ps] = await Promise.all([
       supabase.from('portal_milestones').select('*').eq('portal_id', portalData.id).order('created_at', { ascending: true }),
       supabase.from('portal_files').select('*').eq('portal_id', portalData.id).order('created_at', { ascending: false }),
