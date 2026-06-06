@@ -6,7 +6,9 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import {
   Plus, Copy, ExternalLink, LogOut, CheckCircle2,
   LayoutGrid, Users, CreditCard, X, Lock, MessageSquare,
+  Settings,
 } from 'lucide-react';
+import { resolveWorkspaceAccess } from '@/lib/workspace';
 
 const STANDARD_PORTAL_LIMIT = 3;
 
@@ -58,6 +60,8 @@ function DashboardContent() {
   const [portals, setPortals] = useState<any[]>([]);
   const [portalMeta, setPortalMeta] = useState<Record<string, PortalMeta>>({});
   const [user, setUser] = useState<any>(null);
+  const [ownerId, setOwnerId] = useState<string | null>(null);
+  const [userRole, setUserRole] = useState<'owner' | 'admin' | 'user' | null>(null);
   const [subscription, setSubscription] = useState<{ tier_level: string; subscription_status: string } | null>(null);
   const [loading, setLoading] = useState(true);
   const [showSuccess, setShowSuccess] = useState(false);
@@ -74,19 +78,28 @@ function DashboardContent() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { router.push('/auth'); return; }
     setUser(user);
+
     if (searchParams?.get('success') === 'true') {
       setShowSuccess(true);
       router.replace('/dashboard');
     }
-    await Promise.all([fetchPortals(user.id), fetchSubscription(user.id)]);
+
+    // Resolve workspace access (owner vs team member)
+    const { ownerId, role } = await resolveWorkspaceAccess();
+    setOwnerId(ownerId);
+    setUserRole(role);
+
+    if (!ownerId) { router.push('/auth'); return; }
+
+    await Promise.all([fetchPortals(ownerId), fetchSubscription(ownerId)]);
     setLoading(false);
   };
 
-  const fetchPortals = async (userId: string) => {
+  const fetchPortals = async (ownerIdParam: string) => {
     const { data } = await supabase
       .from('client_portals')
       .select('*')
-      .eq('user_id', userId)
+      .eq('user_id', ownerIdParam)
       .eq('status', 'active')
       .order('created_at', { ascending: false });
     const portals = data || [];
@@ -96,20 +109,12 @@ function DashboardContent() {
       const meta: Record<string, PortalMeta> = {};
       await Promise.all(portals.map(async (p) => {
         const [notesRes, proposalsRes] = await Promise.all([
-          supabase
-            .from('portal_notes')
-            .select('message, created_at', { count: 'exact' })
-            .eq('portal_id', p.id)
-            .eq('is_from_client', true)
-            .order('created_at', { ascending: false })
-            .limit(1),
-          supabase
-            .from('portal_proposals')
-            .select('id')
-            .eq('portal_id', p.id)
-            .in('status', ['accepted', 'declined']),
+          supabase.from('portal_notes').select('message, created_at', { count: 'exact' })
+            .eq('portal_id', p.id).eq('is_from_client', true)
+            .order('created_at', { ascending: false }).limit(1),
+          supabase.from('portal_proposals').select('id')
+            .eq('portal_id', p.id).in('status', ['accepted', 'declined']),
         ]);
-
         meta[p.id] = {
           messageCount: notesRes.count || 0,
           lastMessage: notesRes.data?.[0]?.message || null,
@@ -120,11 +125,11 @@ function DashboardContent() {
     }
   };
 
-  const fetchSubscription = async (userId: string) => {
+  const fetchSubscription = async (ownerIdParam: string) => {
     const { data } = await supabase
       .from('manager_subscriptions')
       .select('tier_level, subscription_status')
-      .eq('user_id', userId)
+      .eq('user_id', ownerIdParam)
       .maybeSingle();
     setSubscription(data);
   };
@@ -135,9 +140,11 @@ function DashboardContent() {
   const isStandard = tier === 'standard' && isSubscriptionActive;
   const activeCount = portals.length;
   const atLimit = isStandard && activeCount >= STANDARD_PORTAL_LIMIT;
+  const isReadOnly = userRole === 'user';
+  const isOwner = userRole === 'owner';
 
   const createNewPortal = async () => {
-    if (!user) return;
+    if (!user || isReadOnly) return;
     if (!isSubscriptionActive) { router.push('/pricing'); return; }
     if (atLimit) { setShowUpgradeModal(true); return; }
 
@@ -151,7 +158,7 @@ function DashboardContent() {
 
     const { data, error } = await supabase
       .from('client_portals')
-      .insert({ user_id: user.id, client_name: clientName, project_name: projectName, magic_token: magicToken, status: 'active' })
+      .insert({ user_id: ownerId, client_name: clientName, project_name: projectName, magic_token: magicToken, status: 'active' })
       .select().single();
 
     if (!error && data) {
@@ -194,7 +201,7 @@ function DashboardContent() {
             </div>
           )}
 
-          {!isSubscriptionActive && (
+          {isOwner && !isSubscriptionActive && (
             <div className="bg-amber-50 border border-amber-200 text-amber-900 p-4 rounded-2xl flex items-center justify-between gap-3">
               <div className="text-sm font-semibold">No active plan. Subscribe to start creating client portals.</div>
               <button onClick={() => router.push('/pricing')}
@@ -204,7 +211,7 @@ function DashboardContent() {
             </div>
           )}
 
-          {isStandard && activeCount >= STANDARD_PORTAL_LIMIT && (
+          {isOwner && isStandard && activeCount >= STANDARD_PORTAL_LIMIT && (
             <div className="bg-zinc-100 border border-zinc-200 text-zinc-700 p-4 rounded-2xl flex items-center justify-between gap-3">
               <div className="text-sm font-semibold">{activeCount}/{STANDARD_PORTAL_LIMIT} portals used. Upgrade to Pro for unlimited.</div>
               <button onClick={() => router.push('/billing')}
@@ -214,29 +221,48 @@ function DashboardContent() {
             </div>
           )}
 
+          {isReadOnly && (
+            <div className="bg-zinc-100 border border-zinc-200 text-zinc-600 p-3 rounded-2xl text-xs font-semibold flex items-center gap-2">
+              <Lock className="w-3.5 h-3.5" /> You have view-only access to this workspace.
+            </div>
+          )}
+
           {/* Header */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-zinc-200">
             <div>
               <h1 className="text-2xl font-black tracking-tight text-zinc-950">Workspace Console</h1>
               <p className="text-sm font-medium text-zinc-500 mt-0.5">
                 {user?.email}
-                {isSubscriptionActive && (
+                {isSubscriptionActive && isOwner && (
                   <span className={`ml-2 text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded ${isPro ? 'bg-zinc-900 text-white' : 'bg-zinc-100 text-zinc-600'}`}>
                     {isPro ? 'Pro' : 'Standard'}
+                  </span>
+                )}
+                {!isOwner && (
+                  <span className="ml-2 text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded bg-zinc-100 text-zinc-600">
+                    {userRole === 'admin' ? 'Admin' : 'Viewer'}
                   </span>
                 )}
               </p>
             </div>
             <div className="flex items-center gap-2">
-              <button onClick={createNewPortal} disabled={creating || !isSubscriptionActive}
-                className="bg-zinc-950 hover:bg-zinc-800 disabled:opacity-40 text-white text-sm font-semibold px-4 py-2.5 rounded-xl transition flex items-center gap-2 cursor-pointer">
-                <Plus className="w-4 h-4" />
-                {creating ? 'Creating...' : 'New Portal'}
-                {isStandard && <span className="text-zinc-400 font-normal text-xs">({activeCount}/{STANDARD_PORTAL_LIMIT})</span>}
-              </button>
-              <button onClick={() => router.push('/billing')}
-                className="bg-white hover:bg-zinc-100 text-zinc-700 border border-zinc-200 p-2.5 rounded-xl transition cursor-pointer" title="Billing">
-                <CreditCard className="w-4 h-4" />
+              {!isReadOnly && (
+                <button onClick={createNewPortal} disabled={creating || (!isOwner && !isSubscriptionActive)}
+                  className="bg-zinc-950 hover:bg-zinc-800 disabled:opacity-40 text-white text-sm font-semibold px-4 py-2.5 rounded-xl transition flex items-center gap-2 cursor-pointer">
+                  <Plus className="w-4 h-4" />
+                  {creating ? 'Creating...' : 'New Portal'}
+                  {isStandard && isOwner && <span className="text-zinc-400 font-normal text-xs">({activeCount}/{STANDARD_PORTAL_LIMIT})</span>}
+                </button>
+              )}
+              {isOwner && (
+                <button onClick={() => router.push('/billing')}
+                  className="bg-white hover:bg-zinc-100 text-zinc-700 border border-zinc-200 p-2.5 rounded-xl transition cursor-pointer" title="Billing">
+                  <CreditCard className="w-4 h-4" />
+                </button>
+              )}
+              <button onClick={() => router.push('/settings')}
+                className="bg-white hover:bg-zinc-100 text-zinc-700 border border-zinc-200 p-2.5 rounded-xl transition cursor-pointer" title="Settings">
+                <Settings className="w-4 h-4" />
               </button>
               <button onClick={handleLogout}
                 className="bg-white hover:bg-zinc-100 text-zinc-700 border border-zinc-200 p-2.5 rounded-xl transition cursor-pointer" title="Logout">
@@ -253,16 +279,18 @@ function DashboardContent() {
               </div>
               <p className="text-base font-bold text-zinc-900">No portals yet</p>
               <p className="text-xs text-zinc-500 font-medium max-w-xs mx-auto mt-1 mb-6">Create your first client workspace to get started.</p>
-              {isSubscriptionActive ? (
-                <button onClick={createNewPortal} disabled={creating}
-                  className="bg-zinc-950 hover:bg-zinc-800 text-white text-xs font-bold px-5 py-3 rounded-xl transition cursor-pointer disabled:opacity-50">
-                  Create First Portal
-                </button>
-              ) : (
-                <button onClick={() => router.push('/pricing')}
-                  className="bg-zinc-950 hover:bg-zinc-800 text-white text-xs font-bold px-5 py-3 rounded-xl transition cursor-pointer">
-                  View Pricing Plans
-                </button>
+              {!isReadOnly && (
+                isSubscriptionActive ? (
+                  <button onClick={createNewPortal} disabled={creating}
+                    className="bg-zinc-950 hover:bg-zinc-800 text-white text-xs font-bold px-5 py-3 rounded-xl transition cursor-pointer disabled:opacity-50">
+                    Create First Portal
+                  </button>
+                ) : isOwner ? (
+                  <button onClick={() => router.push('/pricing')}
+                    className="bg-zinc-950 hover:bg-zinc-800 text-white text-xs font-bold px-5 py-3 rounded-xl transition cursor-pointer">
+                    View Pricing Plans
+                  </button>
+                ) : null
               )}
             </div>
           ) : (
@@ -273,7 +301,6 @@ function DashboardContent() {
                 return (
                   <div key={p.id} className="bg-white border border-zinc-200/80 rounded-2xl p-5 shadow-2xs flex flex-col justify-between hover:border-zinc-400 transition">
                     <div>
-                      {/* Card header */}
                       <div className="flex justify-between items-start mb-3">
                         <span className="text-[10px] uppercase font-black tracking-wider px-2 py-0.5 bg-emerald-50 text-emerald-700 rounded">
                           Active
@@ -290,16 +317,12 @@ function DashboardContent() {
                           </button>
                         </div>
                       </div>
-
                       <h3 className="text-base font-bold tracking-tight text-zinc-950 truncate">{p.client_name}</h3>
                       <p className="text-xs font-semibold text-zinc-500 mt-0.5 truncate">{p.project_name}</p>
 
-                      {/* Message snapshot */}
                       {meta?.lastMessage && (
-                        <button
-                          onClick={() => router.push(`/dashboard/portal/${p.id}`)}
-                          className="mt-3 w-full text-left bg-zinc-50 border border-zinc-100 rounded-xl p-3 hover:bg-zinc-100 transition cursor-pointer"
-                        >
+                        <button onClick={() => router.push(`/dashboard/portal/${p.id}`)}
+                          className="mt-3 w-full text-left bg-zinc-50 border border-zinc-100 rounded-xl p-3 hover:bg-zinc-100 transition cursor-pointer">
                           <div className="flex items-center gap-1.5 mb-1">
                             <MessageSquare className="w-3 h-3 text-zinc-400" />
                             <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">
