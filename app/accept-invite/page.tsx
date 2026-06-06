@@ -54,10 +54,17 @@ function AcceptInviteContent() {
     e.preventDefault();
     setAuthLoading(true);
     if (isSignUp) {
-      const { error } = await supabase.auth.signUp({ email: authEmail, password });
-      if (error) { setErrorMsg(error.message); setAuthLoading(false); return; }
-      // After signup they need to confirm email, but let's try accepting anyway
-      await acceptInvite();
+      const { data, error } = await supabase.auth.signUp({ email: authEmail, password });
+        if (error) { setErrorMsg(error.message); setAuthLoading(false); return; }
+        if (!data.session) {
+          setStatus('error');
+          setErrorMsg('Please check your email and confirm your account, then return to this link.');
+          setAuthLoading(false);
+          return;
+        }
+        // Wait for session cookie to be written
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        await acceptInvite();
     } else {
       const { error } = await supabase.auth.signInWithPassword({ email: authEmail, password });
       if (error) { setErrorMsg(error.message); setAuthLoading(false); return; }
