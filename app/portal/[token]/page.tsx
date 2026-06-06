@@ -126,6 +126,7 @@ export default function ClientPortal({ params }: { params: Promise<{ token: stri
     }
 
     setPortal(portalData);
+    console.log('Portal fetched:', portalData.id, portalData.brand_name);
 
     const [ms, fs, ns, ps] = await Promise.all([
       supabase.from('portal_milestones').select('*').eq('portal_id', portalData.id).order('created_at', { ascending: true }),
