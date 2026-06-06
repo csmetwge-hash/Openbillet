@@ -6,7 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import {
   Plus, Copy, ExternalLink, LogOut, CheckCircle2,
   LayoutGrid, Users, CreditCard, X, Lock, MessageSquare,
-  Settings,
+  Settings, ArrowRight,
 } from 'lucide-react';
 import { resolveWorkspaceAccess } from '@/lib/workspace';
 
@@ -56,6 +56,124 @@ function UpgradeModal({ onClose, onUpgrade }: { onClose: () => void; onUpgrade: 
   );
 }
 
+function CreatePortalModal({ onClose, onCreated }: { onClose: () => void; onCreated: (portal: any) => void }) {
+  const [clientName, setClientName] = useState('');
+  const [projectName, setProjectName] = useState('');
+  const [clientEmail, setClientEmail] = useState('');
+  const [creating, setCreating] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleCreate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!clientName.trim()) return;
+    setCreating(true);
+    setError('');
+
+    const magicToken = Array.from(crypto.getRandomValues(new Uint8Array(16)))
+      .map(b => b.toString(16).padStart(2, '0')).join('');
+
+    const { data, error } = await supabase
+      .from('client_portals')
+      .insert({
+        client_name: clientName.trim(),
+        project_name: projectName.trim() || 'General Engagement',
+        client_email: clientEmail.trim() || null,
+        magic_token: magicToken,
+        status: 'active',
+      })
+      .select().single();
+
+    if (error) {
+      setError(error.message);
+      setCreating(false);
+      return;
+    }
+
+    onCreated(data);
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl p-6 max-w-md w-full space-y-5 shadow-2xl border border-zinc-200">
+        <div className="flex items-center justify-between">
+          <h2 className="text-base font-black text-zinc-900">New Client Portal</h2>
+          <button onClick={onClose} className="text-zinc-400 hover:text-zinc-700 transition cursor-pointer">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        {error && (
+          <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-xs font-medium text-red-700">
+            {error}
+          </div>
+        )}
+
+        <form onSubmit={handleCreate} className="space-y-4">
+          <div>
+            <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-1">
+              Client Name <span className="text-red-400">*</span>
+            </label>
+            <input
+              type="text"
+              required
+              placeholder="e.g. John Smith or ABC Landscaping"
+              value={clientName}
+              onChange={e => setClientName(e.target.value)}
+              className="w-full border border-zinc-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-zinc-900 transition"
+              autoFocus
+            />
+          </div>
+
+          <div>
+            <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-1">
+              Project Name <span className="text-zinc-300">optional</span>
+            </label>
+            <input
+              type="text"
+              placeholder="e.g. Spring Lawn Treatment"
+              value={projectName}
+              onChange={e => setProjectName(e.target.value)}
+              className="w-full border border-zinc-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-zinc-900 transition"
+            />
+          </div>
+
+          <div>
+            <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-1">
+              Client Email <span className="text-zinc-300">optional</span>
+            </label>
+            <input
+              type="email"
+              placeholder="client@example.com"
+              value={clientEmail}
+              onChange={e => setClientEmail(e.target.value)}
+              className="w-full border border-zinc-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-zinc-900 transition"
+            />
+            <p className="text-[10px] text-zinc-400 mt-1">Used for automated notifications and receipts.</p>
+          </div>
+
+          <div className="flex gap-2 pt-1">
+            <button
+              type="submit"
+              disabled={creating || !clientName.trim()}
+              className="flex-1 bg-zinc-900 text-white py-3 rounded-xl text-sm font-bold hover:bg-zinc-700 transition cursor-pointer disabled:opacity-40 flex items-center justify-center gap-2"
+            >
+              {creating ? 'Creating...' : 'Create Portal'}
+              {!creating && <ArrowRight className="w-4 h-4" />}
+            </button>
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-3 border border-zinc-200 rounded-xl text-sm font-semibold text-zinc-600 hover:bg-zinc-50 transition cursor-pointer"
+            >
+              Cancel
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 function DashboardContent() {
   const [portals, setPortals] = useState<any[]>([]);
   const [portalMeta, setPortalMeta] = useState<Record<string, PortalMeta>>({});
@@ -67,7 +185,7 @@ function DashboardContent() {
   const [showSuccess, setShowSuccess] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
-  const [creating, setCreating] = useState(false);
+  const [showCreateModal, setShowCreateModal] = useState(false);
 
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -84,7 +202,6 @@ function DashboardContent() {
       router.replace('/dashboard');
     }
 
-    // Resolve workspace access (owner vs team member)
     const { ownerId, role } = await resolveWorkspaceAccess();
     setOwnerId(ownerId);
     setUserRole(role);
@@ -143,29 +260,19 @@ function DashboardContent() {
   const isReadOnly = userRole === 'user';
   const isOwner = userRole === 'owner';
 
-  const createNewPortal = async () => {
-    if (!user || isReadOnly) return;
+  const handleNewPortal = () => {
+    if (isReadOnly) return;
     if (!isSubscriptionActive) { router.push('/pricing'); return; }
     if (atLimit) { setShowUpgradeModal(true); return; }
+    setShowCreateModal(true);
+  };
 
-    setCreating(true);
-    const clientName = prompt('Enter client company name:');
-    if (!clientName) { setCreating(false); return; }
-    const projectName = prompt('Enter project name:') || 'General Engagement';
-
-    const magicToken = Array.from(crypto.getRandomValues(new Uint8Array(16)))
-      .map(b => b.toString(16).padStart(2, '0')).join('');
-
-    const { data, error } = await supabase
-      .from('client_portals')
-      .insert({ user_id: ownerId, client_name: clientName, project_name: projectName, magic_token: magicToken, status: 'active' })
-      .select().single();
-
-    if (!error && data) {
-      setPortals(prev => [data, ...prev]);
-      setPortalMeta(prev => ({ ...prev, [data.id]: { messageCount: 0, lastMessage: null, hasProposalAction: false } }));
-    }
-    setCreating(false);
+  const handlePortalCreated = (newPortal: any) => {
+    setPortals(prev => [newPortal, ...prev]);
+    setPortalMeta(prev => ({ ...prev, [newPortal.id]: { messageCount: 0, lastMessage: null, hasProposalAction: false } }));
+    setShowCreateModal(false);
+    // Auto-open the new portal workspace
+    router.push(`/dashboard/portal/${newPortal.id}`);
   };
 
   const copyLink = (token: string, id: string) => {
@@ -189,6 +296,12 @@ function DashboardContent() {
     <>
       {showUpgradeModal && (
         <UpgradeModal onClose={() => setShowUpgradeModal(false)} onUpgrade={() => router.push('/billing')} />
+      )}
+      {showCreateModal && (
+        <CreatePortalModal
+          onClose={() => setShowCreateModal(false)}
+          onCreated={handlePortalCreated}
+        />
       )}
 
       <div className="min-h-screen bg-zinc-50/50 p-4 md:p-12 font-sans antialiased">
@@ -247,10 +360,10 @@ function DashboardContent() {
             </div>
             <div className="flex items-center gap-2">
               {!isReadOnly && (
-                <button onClick={createNewPortal} disabled={creating || (!isOwner && !isSubscriptionActive)}
-                  className="bg-zinc-950 hover:bg-zinc-800 disabled:opacity-40 text-white text-sm font-semibold px-4 py-2.5 rounded-xl transition flex items-center gap-2 cursor-pointer">
+                <button onClick={handleNewPortal}
+                  className="bg-zinc-950 hover:bg-zinc-800 text-white text-sm font-semibold px-4 py-2.5 rounded-xl transition flex items-center gap-2 cursor-pointer">
                   <Plus className="w-4 h-4" />
-                  {creating ? 'Creating...' : 'New Portal'}
+                  New Portal
                   {isStandard && isOwner && <span className="text-zinc-400 font-normal text-xs">({activeCount}/{STANDARD_PORTAL_LIMIT})</span>}
                 </button>
               )}
@@ -281,8 +394,8 @@ function DashboardContent() {
               <p className="text-xs text-zinc-500 font-medium max-w-xs mx-auto mt-1 mb-6">Create your first client workspace to get started.</p>
               {!isReadOnly && (
                 isSubscriptionActive ? (
-                  <button onClick={createNewPortal} disabled={creating}
-                    className="bg-zinc-950 hover:bg-zinc-800 text-white text-xs font-bold px-5 py-3 rounded-xl transition cursor-pointer disabled:opacity-50">
+                  <button onClick={handleNewPortal}
+                    className="bg-zinc-950 hover:bg-zinc-800 text-white text-xs font-bold px-5 py-3 rounded-xl transition cursor-pointer">
                     Create First Portal
                   </button>
                 ) : isOwner ? (
