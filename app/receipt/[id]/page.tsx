@@ -2,13 +2,16 @@
 
 import { useEffect, useState, use } from 'react';
 import { supabase } from '@/lib/supabase';
-import { CheckCircle2, Printer, ArrowLeft, Download } from 'lucide-react';
+import { CheckCircle2, Clock, Circle, Printer, ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
 
 interface Milestone {
   id: string;
   title: string;
-  payment_request?: string;
+  description?: string;
+  amount?: string;
+  payment_link?: string;
+  status: string;
   updated_at: string;
   portal_id: string;
 }
@@ -19,6 +22,7 @@ interface Portal {
   client_email?: string;
   brand_name?: string;
   brand_logo_url?: string;
+  user_id: string;
 }
 
 export default function ReceiptPage({ params }: { params: Promise<{ id: string }> }) {
@@ -29,7 +33,7 @@ export default function ReceiptPage({ params }: { params: Promise<{ id: string }
   const [notFound, setNotFound] = useState(false);
 
   useEffect(() => {
-    const fetch = async () => {
+    const fetchData = async () => {
       const { data: m } = await supabase
         .from('portal_milestones')
         .select('*')
@@ -41,22 +45,29 @@ export default function ReceiptPage({ params }: { params: Promise<{ id: string }
 
       const { data: p } = await supabase
         .from('client_portals')
-        .select('client_name, project_name, client_email, brand_name, brand_logo_url')
+        .select('client_name, project_name, client_email, brand_name, brand_logo_url, user_id')
         .eq('id', m.portal_id)
         .single();
 
-      if (p) setPortal(p);
+      if (p) {
+        // Fall back to account-level brand settings
+        if (!p.brand_name && !p.brand_logo_url) {
+          const { data: settings } = await supabase
+            .from('account_settings')
+            .select('brand_name, brand_logo_url')
+            .eq('user_id', p.user_id)
+            .maybeSingle();
+          if (settings) {
+            p.brand_name = settings.brand_name;
+            p.brand_logo_url = settings.brand_logo_url;
+          }
+        }
+        setPortal(p);
+      }
       setLoading(false);
     };
-    fetch();
+    fetchData();
   }, [id]);
-
-  // Extract a dollar amount from payment_request string
-  const extractAmount = (req?: string) => {
-    if (!req) return null;
-    const match = req.match(/\$[\d,]+(\.\d{2})?/);
-    return match ? match[0] : null;
-  };
 
   if (loading) return (
     <div className="min-h-screen bg-zinc-50 flex items-center justify-center">
@@ -74,11 +85,30 @@ export default function ReceiptPage({ params }: { params: Promise<{ id: string }
   );
 
   const brandName = portal.brand_name || 'Operations Hub';
-  const amount = extractAmount(milestone.payment_request);
   const refId = milestone.id.substring(0, 8).toUpperCase();
   const date = new Date(milestone.updated_at).toLocaleDateString('en-US', {
     year: 'numeric', month: 'long', day: 'numeric'
   });
+
+  const statusConfig: Record<string, { label: string; icon: React.ReactNode; color: string }> = {
+    completed: {
+      label: 'Completed',
+      icon: <CheckCircle2 className="w-3.5 h-3.5" />,
+      color: 'bg-emerald-50 text-emerald-700 border-emerald-100',
+    },
+    in_progress: {
+      label: 'In Progress',
+      icon: <Clock className="w-3.5 h-3.5" />,
+      color: 'bg-amber-50 text-amber-700 border-amber-100',
+    },
+    incomplete: {
+      label: 'Incomplete',
+      icon: <Circle className="w-3.5 h-3.5" />,
+      color: 'bg-zinc-50 text-zinc-600 border-zinc-100',
+    },
+  };
+
+  const status = statusConfig[milestone.status] || statusConfig.incomplete;
 
   return (
     <div className="min-h-screen bg-zinc-50 font-sans antialiased">
@@ -86,16 +116,12 @@ export default function ReceiptPage({ params }: { params: Promise<{ id: string }
       {/* Toolbar — hidden on print */}
       <div className="print:hidden bg-white border-b border-zinc-200 sticky top-0 z-40">
         <div className="max-w-2xl mx-auto px-4 py-3 flex items-center justify-between">
-          <Link
-            href="/dashboard"
-            className="flex items-center gap-1.5 text-sm font-bold text-zinc-500 hover:text-zinc-900 transition"
-          >
+          <Link href="/dashboard"
+            className="flex items-center gap-1.5 text-sm font-bold text-zinc-500 hover:text-zinc-900 transition">
             <ArrowLeft className="w-4 h-4" /> Dashboard
           </Link>
-          <button
-            onClick={() => window.print()}
-            className="flex items-center gap-2 bg-zinc-900 text-white text-xs font-bold px-4 py-2.5 rounded-xl hover:bg-zinc-700 transition cursor-pointer"
-          >
+          <button onClick={() => window.print()}
+            className="flex items-center gap-2 bg-zinc-900 text-white text-xs font-bold px-4 py-2.5 rounded-xl hover:bg-zinc-700 transition cursor-pointer">
             <Printer className="w-3.5 h-3.5" />
             Save / Print PDF
           </button>
@@ -104,7 +130,7 @@ export default function ReceiptPage({ params }: { params: Promise<{ id: string }
 
       {/* Receipt card */}
       <div className="max-w-2xl mx-auto px-4 py-8 print:p-0 print:max-w-none">
-        <div className="bg-white border border-zinc-200 rounded-3xl overflow-hidden print:rounded-none print:border-0 print:shadow-none">
+        <div className="bg-white border border-zinc-200 rounded-3xl overflow-hidden print:rounded-none print:border-0">
 
           {/* Header */}
           <div className="p-6 md:p-8 border-b border-zinc-100 flex flex-col sm:flex-row sm:items-start justify-between gap-4">
@@ -119,14 +145,14 @@ export default function ReceiptPage({ params }: { params: Promise<{ id: string }
                   <span className="text-sm font-black text-zinc-900">{brandName}</span>
                 </div>
               )}
-              <h1 className="text-xl font-black text-zinc-900 tracking-tight">Payment Receipt</h1>
+              <h1 className="text-xl font-black text-zinc-900 tracking-tight">Milestone Receipt</h1>
               <p className="text-xs text-zinc-400 font-mono mt-1">Ref #{refId}</p>
             </div>
-            <div className="flex flex-col items-start sm:items-end gap-1">
-              <span className="inline-flex items-center gap-1.5 bg-emerald-50 text-emerald-700 text-xs font-black px-3 py-1.5 rounded-full border border-emerald-100">
-                <CheckCircle2 className="w-3.5 h-3.5" /> Payment Settled
+            <div className="flex flex-col items-start sm:items-end gap-2">
+              <span className={`inline-flex items-center gap-1.5 text-xs font-black px-3 py-1.5 rounded-full border ${status.color}`}>
+                {status.icon} {status.label}
               </span>
-              <p className="text-xs text-zinc-400 font-medium mt-1">{date}</p>
+              <p className="text-xs text-zinc-400 font-medium">{date}</p>
             </div>
           </div>
 
@@ -157,12 +183,13 @@ export default function ReceiptPage({ params }: { params: Promise<{ id: string }
                 <tr>
                   <td className="py-4 pr-4">
                     <p className="font-semibold text-zinc-900">{milestone.title}</p>
-                    <p className="text-xs text-zinc-400 mt-0.5">Milestone completed & approved</p>
+                    {milestone.description && (
+                      <p className="text-xs text-zinc-400 mt-0.5">{milestone.description}</p>
+                    )}
+                    <p className="text-xs text-zinc-400 mt-0.5 capitalize">Status: {milestone.status.replace('_', ' ')}</p>
                   </td>
                   <td className="py-4 text-right font-black text-zinc-900">
-                    {amount || (milestone.payment_request && !milestone.payment_request.startsWith('http')
-                      ? milestone.payment_request
-                      : 'Included')}
+                    {milestone.amount || '—'}
                   </td>
                 </tr>
               </tbody>
@@ -170,17 +197,17 @@ export default function ReceiptPage({ params }: { params: Promise<{ id: string }
                 <tr className="border-t border-zinc-200">
                   <td className="pt-4 text-xs font-bold text-zinc-500 uppercase tracking-wider text-right pr-4">Total</td>
                   <td className="pt-4 text-right text-lg font-black text-zinc-900">
-                    {amount || '—'}
+                    {milestone.amount || '—'}
                   </td>
                 </tr>
               </tfoot>
             </table>
           </div>
 
-          {/* Footer note */}
+          {/* Footer */}
           <div className="p-6 md:p-8 bg-zinc-50 print:bg-white">
             <p className="text-xs text-zinc-400 leading-relaxed text-center max-w-md mx-auto">
-              This receipt confirms completion and payment of the above milestone. No further payment is outstanding for this item. Thank you for your business.
+              This receipt confirms the milestone details listed above. Thank you for your business.
             </p>
             <p className="text-[10px] font-mono text-zinc-300 text-center mt-3">
               Generated by OpenBillet · openbillet.com
