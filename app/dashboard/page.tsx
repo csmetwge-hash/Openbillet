@@ -80,6 +80,8 @@ function CreatePortalModal({
     const magicToken = Array.from(crypto.getRandomValues(new Uint8Array(16)))
       .map(b => b.toString(16).padStart(2, '0')).join('');
 
+    const { data: { user: currentUser } } = await supabase.auth.getUser();
+
     const { data, error } = await supabase
       .from('client_portals')
       .insert({
