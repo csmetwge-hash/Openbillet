@@ -56,7 +56,15 @@ function UpgradeModal({ onClose, onUpgrade }: { onClose: () => void; onUpgrade: 
   );
 }
 
-function CreatePortalModal({ onClose, onCreated }: { onClose: () => void; onCreated: (portal: any) => void }) {
+function CreatePortalModal({
+  ownerId,
+  onClose,
+  onCreated,
+}: {
+  ownerId: string;
+  onClose: () => void;
+  onCreated: (portal: any) => void;
+}) {
   const [clientName, setClientName] = useState('');
   const [projectName, setProjectName] = useState('');
   const [clientEmail, setClientEmail] = useState('');
@@ -75,6 +83,7 @@ function CreatePortalModal({ onClose, onCreated }: { onClose: () => void; onCrea
     const { data, error } = await supabase
       .from('client_portals')
       .insert({
+        user_id: ownerId,
         client_name: clientName.trim(),
         project_name: projectName.trim() || 'General Engagement',
         client_email: clientEmail.trim() || null,
@@ -123,7 +132,6 @@ function CreatePortalModal({ onClose, onCreated }: { onClose: () => void; onCrea
               autoFocus
             />
           </div>
-
           <div>
             <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-1">
               Project Name <span className="text-zinc-300">optional</span>
@@ -136,7 +144,6 @@ function CreatePortalModal({ onClose, onCreated }: { onClose: () => void; onCrea
               className="w-full border border-zinc-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-zinc-900 transition"
             />
           </div>
-
           <div>
             <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-1">
               Client Email <span className="text-zinc-300">optional</span>
@@ -150,7 +157,6 @@ function CreatePortalModal({ onClose, onCreated }: { onClose: () => void; onCrea
             />
             <p className="text-[10px] text-zinc-400 mt-1">Used for automated notifications and receipts.</p>
           </div>
-
           <div className="flex gap-2 pt-1">
             <button
               type="submit"
@@ -271,7 +277,6 @@ function DashboardContent() {
     setPortals(prev => [newPortal, ...prev]);
     setPortalMeta(prev => ({ ...prev, [newPortal.id]: { messageCount: 0, lastMessage: null, hasProposalAction: false } }));
     setShowCreateModal(false);
-    // Auto-open the new portal workspace
     router.push(`/dashboard/portal/${newPortal.id}`);
   };
 
@@ -297,8 +302,9 @@ function DashboardContent() {
       {showUpgradeModal && (
         <UpgradeModal onClose={() => setShowUpgradeModal(false)} onUpgrade={() => router.push('/billing')} />
       )}
-      {showCreateModal && (
+      {showCreateModal && ownerId && (
         <CreatePortalModal
+          ownerId={ownerId}
           onClose={() => setShowCreateModal(false)}
           onCreated={handlePortalCreated}
         />
@@ -364,7 +370,9 @@ function DashboardContent() {
                   className="bg-zinc-950 hover:bg-zinc-800 text-white text-sm font-semibold px-4 py-2.5 rounded-xl transition flex items-center gap-2 cursor-pointer">
                   <Plus className="w-4 h-4" />
                   New Portal
-                  {isStandard && isOwner && <span className="text-zinc-400 font-normal text-xs">({activeCount}/{STANDARD_PORTAL_LIMIT})</span>}
+                  {isStandard && isOwner && (
+                    <span className="text-zinc-400 font-normal text-xs">({activeCount}/{STANDARD_PORTAL_LIMIT})</span>
+                  )}
                 </button>
               )}
               {isOwner && (
@@ -391,7 +399,9 @@ function DashboardContent() {
                 <Users className="w-6 h-6 text-zinc-400" />
               </div>
               <p className="text-base font-bold text-zinc-900">No portals yet</p>
-              <p className="text-xs text-zinc-500 font-medium max-w-xs mx-auto mt-1 mb-6">Create your first client workspace to get started.</p>
+              <p className="text-xs text-zinc-500 font-medium max-w-xs mx-auto mt-1 mb-6">
+                Create your first client workspace to get started.
+              </p>
               {!isReadOnly && (
                 isSubscriptionActive ? (
                   <button onClick={handleNewPortal}
