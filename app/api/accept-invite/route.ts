@@ -43,6 +43,10 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Invite not found or already used.' }, { status: 404 });
     }
 
+    console.log('User email:', user.email);
+    console.log('Invite email:', email);
+    console.log('Match:', user.email?.toLowerCase() === email.toLowerCase());
+
     if (user.email?.toLowerCase() !== email.toLowerCase()) {
       return NextResponse.json({ error: 'You must be logged in with the invited email address.' }, { status: 403 });
     }
