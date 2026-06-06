@@ -81,9 +81,6 @@ function CreatePortalModal({
       .map(b => b.toString(16).padStart(2, '0')).join('');
 
     const { data: { user: currentUser } } = await supabase.auth.getUser();
-    console.log('Inserting with ownerId:', ownerId);
-    console.log('Current user id:', currentUser?.id);
-    console.log('Match:', ownerId === currentUser?.id);
 
     const { data, error } = await supabase
       .from('client_portals')
