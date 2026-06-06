@@ -121,6 +121,8 @@ export default function ClientPortal({ params }: { params: Promise<{ token: stri
         portalData.brand_name = settings.brand_name;
         portalData.brand_logo_url = settings.brand_logo_url;
       }
+      console.log('Portal brand:', portalData.brand_name, portalData.brand_logo_url);
+      console.log('Settings brand:', settings?.brand_name, settings?.brand_logo_url);
     }
 
     setPortal(portalData);
