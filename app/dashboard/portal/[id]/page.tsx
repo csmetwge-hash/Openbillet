@@ -7,8 +7,9 @@ import {
   ArrowLeft, FileIcon, MessageSquare, Send, Upload,
   Layers, Plus, Trash2, ExternalLink, ClipboardList,
   User, Phone, MapPin, Tag, FileText, Edit3,
-  Copy, Check, X, ChevronDown, ChevronUp,
+  Copy, Check, X, Lock,
 } from 'lucide-react';
+import { resolveWorkspaceAccess } from '@/lib/workspace';
 
 type Tab = 'milestones' | 'files' | 'messages' | 'proposals' | 'crm';
 
@@ -21,11 +22,7 @@ interface MilestoneForm {
 }
 
 const emptyForm: MilestoneForm = {
-  title: '',
-  description: '',
-  amount: '',
-  payment_link: '',
-  responsibility: 'provider',
+  title: '', description: '', amount: '', payment_link: '', responsibility: 'provider',
 };
 
 export default function AdminPortalWorkspace({ params }: { params: Promise<{ id: string }> }) {
@@ -40,16 +37,18 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
   const [activeTab, setActiveTab] = useState<Tab>('milestones');
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState(false);
+  const [userRole, setUserRole] = useState<'owner' | 'admin' | 'user' | null>(null);
 
-  // Milestone form (add + edit shared)
+  const pageTopRef = useRef<HTMLDivElement>(null);
+  const chatEndRef = useRef<HTMLDivElement>(null);
+
+  // Milestone form
   const [showMilestoneForm, setShowMilestoneForm] = useState(false);
   const [editingMilestoneId, setEditingMilestoneId] = useState<string | null>(null);
   const [milestoneForm, setMilestoneForm] = useState<MilestoneForm>(emptyForm);
 
   // Message
   const [adminMessage, setAdminMessage] = useState('');
-  const chatEndRef = useRef<HTMLDivElement>(null);
-  const pageTopRef = useRef<HTMLDivElement>(null);
 
   // File upload
   const [uploading, setUploading] = useState(false);
@@ -66,6 +65,8 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
   const [crmFields, setCrmFields] = useState({ client_phone: '', client_company: '', client_address: '', notes: '' });
   const [savingCrm, setSavingCrm] = useState(false);
 
+  const isReadOnly = userRole === 'user';
+
   useEffect(() => {
     fetchAll();
     const notesChannel = supabase
@@ -79,11 +80,12 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
   useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [notes]);
 
   const fetchAll = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) { router.push('/auth'); return; }
+    const { ownerId, role } = await resolveWorkspaceAccess();
+    if (!ownerId) { router.push('/auth'); return; }
+    setUserRole(role);
 
     const { data: portalData, error } = await supabase
-      .from('client_portals').select('*').eq('id', portalId).eq('user_id', user.id).single();
+      .from('client_portals').select('*').eq('id', portalId).eq('user_id', ownerId).single();
 
     if (error || !portalData) { router.push('/dashboard'); return; }
     setPortal(portalData);
@@ -119,18 +121,18 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
   };
 
   const openAddForm = () => {
+    if (isReadOnly) return;
     setEditingMilestoneId(null);
     setMilestoneForm(emptyForm);
     setShowMilestoneForm(true);
   };
 
   const openEditForm = (m: any) => {
+    if (isReadOnly) return;
     setEditingMilestoneId(m.id);
     setMilestoneForm({
-      title: m.title || '',
-      description: m.description || '',
-      amount: m.amount || '',
-      payment_link: m.payment_link || '',
+      title: m.title || '', description: m.description || '',
+      amount: m.amount || '', payment_link: m.payment_link || '',
       responsibility: m.responsibility || 'provider',
     });
     setShowMilestoneForm(true);
@@ -139,44 +141,38 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
 
   const saveMilestone = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!milestoneForm.title.trim()) return;
-
+    if (!milestoneForm.title.trim() || isReadOnly) return;
     const payload = {
-      title: milestoneForm.title,
-      description: milestoneForm.description || null,
-      amount: milestoneForm.amount || null,
-      payment_link: milestoneForm.payment_link || null,
+      title: milestoneForm.title, description: milestoneForm.description || null,
+      amount: milestoneForm.amount || null, payment_link: milestoneForm.payment_link || null,
       responsibility: milestoneForm.responsibility,
     };
-
     if (editingMilestoneId) {
       await supabase.from('portal_milestones').update(payload).eq('id', editingMilestoneId);
     } else {
       await supabase.from('portal_milestones').insert({ ...payload, portal_id: portal.id, status: 'incomplete' });
     }
-
-    setShowMilestoneForm(false);
-    setEditingMilestoneId(null);
-    setMilestoneForm(emptyForm);
-
+    setShowMilestoneForm(false); setEditingMilestoneId(null); setMilestoneForm(emptyForm);
     const { data } = await supabase.from('portal_milestones').select('*').eq('portal_id', portal.id).order('created_at', { ascending: true });
     setMilestones(data || []);
   };
 
   const advanceMilestone = async (id: string, current: string) => {
+    if (isReadOnly) return;
     const next: Record<string, string> = { incomplete: 'in_progress', in_progress: 'completed', completed: 'incomplete' };
     await supabase.from('portal_milestones').update({ status: next[current] }).eq('id', id);
     setMilestones(prev => prev.map(m => m.id === id ? { ...m, status: next[current] } : m));
   };
 
   const deleteMilestone = async (id: string) => {
+    if (isReadOnly) return;
     if (!confirm('Delete this milestone?')) return;
     await supabase.from('portal_milestones').delete().eq('id', id);
     setMilestones(prev => prev.filter(m => m.id !== id));
   };
 
-  // ── Files ────────────────────────────────────────────────
   const uploadFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (isReadOnly) return;
     const file = e.target.files?.[0];
     if (!file || !portal) return;
     setUploading(true);
@@ -191,47 +187,43 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
     finally { setUploading(false); }
   };
 
-  // ── Messages ─────────────────────────────────────────────
   const sendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!adminMessage.trim()) return;
+    if (!adminMessage.trim() || isReadOnly) return;
     await supabase.from('portal_notes').insert({ portal_id: portal.id, message: adminMessage, is_from_client: false });
     setAdminMessage('');
   };
 
-  // ── Proposals ────────────────────────────────────────────
   const totalAmount = lineItems.reduce((sum, item) => sum + (item.quantity * item.unit_price), 0);
 
   const saveProposal = async (asDraft: boolean) => {
-    if (!proposalTitle.trim()) return;
+    if (!proposalTitle.trim() || isReadOnly) return;
     setSavingProposal(true);
     const { data: prop } = await supabase.from('portal_proposals').insert({
       portal_id: portal.id, title: proposalTitle, body: proposalBody,
       status: asDraft ? 'draft' : 'sent',
       total_amount: totalAmount > 0 ? `$${totalAmount.toLocaleString()}` : null,
     }).select().single();
-
     if (prop && lineItems.some(i => i.description)) {
       await supabase.from('proposal_line_items').insert(
         lineItems.filter(i => i.description).map(i => ({ proposal_id: prop.id, ...i }))
       );
     }
-
     setProposalTitle(''); setProposalBody('');
     setLineItems([{ description: '', quantity: 1, unit_price: 0 }]);
     setShowProposalForm(false); setSavingProposal(false);
-
     const { data } = await supabase.from('portal_proposals').select('*, proposal_line_items(*)').eq('portal_id', portal.id).order('created_at', { ascending: false });
     setProposals((data || []).map((p: any) => ({ ...p, line_items: p.proposal_line_items || [] })));
   };
 
   const sendProposal = async (id: string) => {
+    if (isReadOnly) return;
     await supabase.from('portal_proposals').update({ status: 'sent' }).eq('id', id);
     setProposals(prev => prev.map(p => p.id === id ? { ...p, status: 'sent' } : p));
   };
 
-  // ── CRM ──────────────────────────────────────────────────
   const saveCrm = async () => {
+    if (isReadOnly) return;
     setSavingCrm(true);
     await supabase.from('client_portals').update(crmFields).eq('id', portal.id);
     setPortal((prev: any) => ({ ...prev, ...crmFields }));
@@ -264,7 +256,14 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
             </button>
             <div className="min-w-0">
               <h1 className="text-base font-black tracking-tight text-zinc-950 truncate">{portal.client_name}</h1>
-              <p className="text-[11px] text-zinc-500 font-medium truncate">{portal.project_name}</p>
+              <div className="flex items-center gap-2">
+                <p className="text-[11px] text-zinc-500 font-medium truncate">{portal.project_name}</p>
+                {isReadOnly && (
+                  <span className="flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider text-zinc-400">
+                    <Lock className="w-2.5 h-2.5" /> View only
+                  </span>
+                )}
+              </div>
             </div>
           </div>
           <div className="flex items-center gap-2 shrink-0">
@@ -299,16 +298,16 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
         {/* MILESTONES */}
         {activeTab === 'milestones' && (
           <>
-            <button onClick={openAddForm}
-              className="w-full flex items-center justify-center gap-2 py-3 border-2 border-dashed border-zinc-300 rounded-2xl text-sm font-bold text-zinc-500 hover:border-zinc-400 hover:text-zinc-700 transition cursor-pointer">
-              <Plus className="w-4 h-4" /> Add Milestone
-            </button>
+            {!isReadOnly && (
+              <button onClick={openAddForm}
+                className="w-full flex items-center justify-center gap-2 py-3 border-2 border-dashed border-zinc-300 rounded-2xl text-sm font-bold text-zinc-500 hover:border-zinc-400 hover:text-zinc-700 transition cursor-pointer">
+                <Plus className="w-4 h-4" /> Add Milestone
+              </button>
+            )}
 
-            {showMilestoneForm && (
+            {showMilestoneForm && !isReadOnly && (
               <div className="bg-white border border-zinc-200 rounded-2xl p-4 space-y-3">
-                <h3 className="text-sm font-black text-zinc-900">
-                  {editingMilestoneId ? 'Edit Milestone' : 'New Milestone'}
-                </h3>
+                <h3 className="text-sm font-black text-zinc-900">{editingMilestoneId ? 'Edit Milestone' : 'New Milestone'}</h3>
                 <div>
                   <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-1">Title <span className="text-red-400">*</span></label>
                   <input type="text" placeholder="e.g. Initial site visit"
@@ -319,8 +318,7 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
                   <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-1">Description <span className="text-zinc-300">optional</span></label>
                   <textarea placeholder="Additional details about this milestone..."
                     value={milestoneForm.description} onChange={e => updateForm('description', e.target.value)}
-                    rows={2}
-                    className="w-full border border-zinc-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-zinc-900 transition resize-none" />
+                    rows={2} className="w-full border border-zinc-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-zinc-900 transition resize-none" />
                 </div>
                 <div>
                   <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-1">Amount <span className="text-zinc-300">optional</span></label>
@@ -343,8 +341,7 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
                   </select>
                 </div>
                 <div className="flex gap-2 pt-1">
-                  <button onClick={saveMilestone as any}
-                    disabled={!milestoneForm.title.trim()}
+                  <button onClick={saveMilestone as any} disabled={!milestoneForm.title.trim()}
                     className="flex-1 bg-zinc-900 text-white py-3 rounded-xl text-sm font-bold hover:bg-zinc-700 transition cursor-pointer disabled:opacity-40">
                     {editingMilestoneId ? 'Save Changes' : 'Add Milestone'}
                   </button>
@@ -367,7 +364,8 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
               <div key={m.id} className={`bg-white border rounded-2xl p-4 transition ${m.status === 'completed' ? 'border-zinc-100 opacity-70' : 'border-zinc-200'}`}>
                 <div className="flex items-start gap-3">
                   <button onClick={() => advanceMilestone(m.id, m.status)}
-                    className={`shrink-0 mt-0.5 w-6 h-6 rounded-full border-2 flex items-center justify-center transition cursor-pointer ${
+                    disabled={isReadOnly}
+                    className={`shrink-0 mt-0.5 w-6 h-6 rounded-full border-2 flex items-center justify-center transition ${isReadOnly ? 'cursor-default' : 'cursor-pointer'} ${
                       m.status === 'completed' ? 'bg-zinc-900 border-zinc-900'
                       : m.status === 'in_progress' ? 'border-amber-400'
                       : 'border-zinc-300 hover:border-zinc-500'
@@ -377,9 +375,7 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
                   </button>
                   <div className="flex-1 min-w-0">
                     <p className={`text-sm font-semibold ${m.status === 'completed' ? 'line-through text-zinc-400' : 'text-zinc-900'}`}>{m.title}</p>
-                    {m.description && (
-                      <p className="text-xs text-zinc-500 mt-1 leading-relaxed">{m.description}</p>
-                    )}
+                    {m.description && <p className="text-xs text-zinc-500 mt-1 leading-relaxed">{m.description}</p>}
                     <div className="flex items-center gap-2 mt-1.5 flex-wrap">
                       <span className={`text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full ${
                         m.status === 'completed' ? 'bg-emerald-50 text-emerald-600'
@@ -389,20 +385,20 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
                       <span className="text-[10px] text-zinc-400">{m.responsibility === 'client' ? 'Customer' : 'You'}</span>
                       {m.amount && <span className="text-[10px] font-bold text-zinc-600">{m.amount}</span>}
                     </div>
-                    {m.payment_link && (
-                      <p className="text-xs text-zinc-400 mt-1 truncate">{m.payment_link}</p>
-                    )}
+                    {m.payment_link && <p className="text-xs text-zinc-400 mt-1 truncate">{m.payment_link}</p>}
                   </div>
-                  <div className="flex items-center gap-1 shrink-0">
-                    <button onClick={() => openEditForm(m)}
-                      className="p-1.5 text-zinc-300 hover:text-zinc-600 transition cursor-pointer rounded-lg hover:bg-zinc-100">
-                      <Edit3 className="w-3.5 h-3.5" />
-                    </button>
-                    <button onClick={() => deleteMilestone(m.id)}
-                      className="p-1.5 text-zinc-300 hover:text-red-400 transition cursor-pointer rounded-lg hover:bg-red-50">
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
+                  {!isReadOnly && (
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button onClick={() => openEditForm(m)}
+                        className="p-1.5 text-zinc-300 hover:text-zinc-600 transition cursor-pointer rounded-lg hover:bg-zinc-100">
+                        <Edit3 className="w-3.5 h-3.5" />
+                      </button>
+                      <button onClick={() => deleteMilestone(m.id)}
+                        className="p-1.5 text-zinc-300 hover:text-red-400 transition cursor-pointer rounded-lg hover:bg-red-50">
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
             ))}
@@ -412,12 +408,14 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
         {/* FILES */}
         {activeTab === 'files' && (
           <>
-            <label className={`block w-full border-2 border-dashed border-zinc-300 rounded-2xl p-6 text-center cursor-pointer hover:border-zinc-400 transition ${uploading ? 'opacity-40 pointer-events-none' : ''}`}>
-              <Upload className="w-6 h-6 text-zinc-400 mx-auto mb-2" />
-              <p className="text-sm font-bold text-zinc-600">{uploading ? 'Uploading...' : 'Tap to upload file'}</p>
-              <p className="text-xs text-zinc-400 mt-1">Any file type</p>
-              <input type="file" className="hidden" onChange={uploadFile} disabled={uploading} />
-            </label>
+            {!isReadOnly && (
+              <label className={`block w-full border-2 border-dashed border-zinc-300 rounded-2xl p-6 text-center cursor-pointer hover:border-zinc-400 transition ${uploading ? 'opacity-40 pointer-events-none' : ''}`}>
+                <Upload className="w-6 h-6 text-zinc-400 mx-auto mb-2" />
+                <p className="text-sm font-bold text-zinc-600">{uploading ? 'Uploading...' : 'Tap to upload file'}</p>
+                <p className="text-xs text-zinc-400 mt-1">Any file type</p>
+                <input type="file" className="hidden" onChange={uploadFile} disabled={uploading} />
+              </label>
+            )}
             {files.length === 0 && (
               <div className="text-center py-12 text-zinc-400">
                 <FileIcon className="w-8 h-8 mx-auto mb-2 opacity-30" />
@@ -426,9 +424,7 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
             )}
             {files.map(file => (
               <div key={file.id} className="bg-white border border-zinc-200 rounded-2xl p-4 flex items-center gap-3">
-                <div className="p-2 bg-zinc-100 rounded-xl shrink-0">
-                  <FileIcon className="w-4 h-4 text-zinc-500" />
-                </div>
+                <div className="p-2 bg-zinc-100 rounded-xl shrink-0"><FileIcon className="w-4 h-4 text-zinc-500" /></div>
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-semibold text-zinc-900 truncate">{file.file_name}</p>
                   <span className={`text-[10px] font-bold uppercase ${file.status === 'approved' ? 'text-emerald-600' : 'text-amber-600'}`}>
@@ -464,29 +460,33 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
               ))}
               <div ref={chatEndRef} />
             </div>
-            <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-zinc-200 p-3 z-50">
-              <form onSubmit={sendMessage} className="max-w-4xl mx-auto flex gap-2">
-                <input type="text" value={adminMessage} onChange={e => setAdminMessage(e.target.value)}
-                  placeholder="Message customer..."
-                  className="flex-1 bg-zinc-50 border border-zinc-200 rounded-2xl px-4 py-3 text-sm focus:outline-none focus:border-zinc-900 transition" />
-                <button type="submit" disabled={!adminMessage.trim()}
-                  className="bg-zinc-900 text-white px-4 rounded-2xl disabled:opacity-40 hover:bg-zinc-700 transition cursor-pointer">
-                  <Send className="w-4 h-4" />
-                </button>
-              </form>
-            </div>
+            {!isReadOnly && (
+              <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-zinc-200 p-3 z-50">
+                <form onSubmit={sendMessage} className="max-w-4xl mx-auto flex gap-2">
+                  <input type="text" value={adminMessage} onChange={e => setAdminMessage(e.target.value)}
+                    placeholder="Message customer..."
+                    className="flex-1 bg-zinc-50 border border-zinc-200 rounded-2xl px-4 py-3 text-sm focus:outline-none focus:border-zinc-900 transition" />
+                  <button type="submit" disabled={!adminMessage.trim()}
+                    className="bg-zinc-900 text-white px-4 rounded-2xl disabled:opacity-40 hover:bg-zinc-700 transition cursor-pointer">
+                    <Send className="w-4 h-4" />
+                  </button>
+                </form>
+              </div>
+            )}
           </div>
         )}
 
         {/* PROPOSALS */}
         {activeTab === 'proposals' && (
           <>
-            <button onClick={() => setShowProposalForm(!showProposalForm)}
-              className="w-full flex items-center justify-center gap-2 py-3 border-2 border-dashed border-zinc-300 rounded-2xl text-sm font-bold text-zinc-500 hover:border-zinc-400 hover:text-zinc-700 transition cursor-pointer">
-              <Plus className="w-4 h-4" /> New Proposal
-            </button>
+            {!isReadOnly && (
+              <button onClick={() => setShowProposalForm(!showProposalForm)}
+                className="w-full flex items-center justify-center gap-2 py-3 border-2 border-dashed border-zinc-300 rounded-2xl text-sm font-bold text-zinc-500 hover:border-zinc-400 hover:text-zinc-700 transition cursor-pointer">
+                <Plus className="w-4 h-4" /> New Proposal
+              </button>
+            )}
 
-            {showProposalForm && (
+            {showProposalForm && !isReadOnly && (
               <div className="bg-white border border-zinc-200 rounded-2xl p-4 space-y-4">
                 <h3 className="text-sm font-black text-zinc-900">New Proposal</h3>
                 <input type="text" placeholder="Proposal title"
@@ -494,9 +494,7 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
                   className="w-full border border-zinc-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-zinc-900 transition" />
                 <textarea placeholder="Scope of work, terms, notes..."
                   value={proposalBody} onChange={e => setProposalBody(e.target.value)}
-                  rows={4}
-                  className="w-full border border-zinc-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-zinc-900 transition resize-none" />
-
+                  rows={4} className="w-full border border-zinc-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-zinc-900 transition resize-none" />
                 <div className="space-y-3">
                   <p className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Line Items</p>
                   <div className="grid grid-cols-12 gap-2 px-1">
@@ -507,16 +505,13 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
                   </div>
                   {lineItems.map((item, i) => (
                     <div key={i} className="grid grid-cols-12 gap-2 items-center">
-                      <input type="text" placeholder="e.g. Lawn mowing"
-                        value={item.description}
+                      <input type="text" placeholder="e.g. Lawn mowing" value={item.description}
                         onChange={e => setLineItems(prev => prev.map((it, idx) => idx === i ? { ...it, description: e.target.value } : it))}
                         className="col-span-6 border border-zinc-200 rounded-xl px-3 py-2.5 text-xs focus:outline-none focus:border-zinc-900 transition" />
-                      <input type="number" min={1}
-                        value={item.quantity}
+                      <input type="number" min={1} value={item.quantity}
                         onChange={e => setLineItems(prev => prev.map((it, idx) => idx === i ? { ...it, quantity: Number(e.target.value) } : it))}
                         className="col-span-2 border border-zinc-200 rounded-xl px-2 py-2.5 text-xs focus:outline-none focus:border-zinc-900 transition text-center" />
-                      <input type="number" min={0} placeholder="0"
-                        value={item.unit_price || ''}
+                      <input type="number" min={0} placeholder="0" value={item.unit_price || ''}
                         onChange={e => setLineItems(prev => prev.map((it, idx) => idx === i ? { ...it, unit_price: Number(e.target.value) } : it))}
                         className="col-span-3 border border-zinc-200 rounded-xl px-3 py-2.5 text-xs focus:outline-none focus:border-zinc-900 transition" />
                       <button onClick={() => setLineItems(prev => prev.filter((_, idx) => idx !== i))}
@@ -536,15 +531,12 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
                     </div>
                   )}
                 </div>
-
                 <div className="flex gap-2 pt-2">
-                  <button onClick={() => saveProposal(false)}
-                    disabled={!proposalTitle.trim() || savingProposal}
+                  <button onClick={() => saveProposal(false)} disabled={!proposalTitle.trim() || savingProposal}
                     className="flex-1 bg-zinc-900 text-white py-3 rounded-xl text-sm font-bold disabled:opacity-40 hover:bg-zinc-700 transition cursor-pointer">
                     {savingProposal ? 'Saving...' : 'Send to Customer'}
                   </button>
-                  <button onClick={() => saveProposal(true)}
-                    disabled={!proposalTitle.trim() || savingProposal}
+                  <button onClick={() => saveProposal(true)} disabled={!proposalTitle.trim() || savingProposal}
                     className="px-4 py-3 border border-zinc-200 rounded-xl text-sm font-semibold text-zinc-600 hover:bg-zinc-50 transition cursor-pointer">
                     Draft
                   </button>
@@ -579,9 +571,7 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
                 </div>
                 {p.status === 'accepted' && (
                   <div className="px-4 pb-4">
-                    <p className="text-xs text-emerald-600 font-semibold">
-                      ✓ Signed by {p.accepted_signature} · {new Date(p.accepted_at).toLocaleDateString()}
-                    </p>
+                    <p className="text-xs text-emerald-600 font-semibold">✓ Signed by {p.accepted_signature} · {new Date(p.accepted_at).toLocaleDateString()}</p>
                   </div>
                 )}
                 {p.status === 'declined' && (
@@ -589,7 +579,7 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
                     <p className="text-xs text-red-500 font-semibold">Customer declined this proposal.</p>
                   </div>
                 )}
-                {p.status === 'draft' && (
+                {p.status === 'draft' && !isReadOnly && (
                   <div className="px-4 pb-4">
                     <button onClick={() => sendProposal(p.id)}
                       className="text-xs font-bold text-zinc-900 underline cursor-pointer hover:text-zinc-600 transition">
@@ -608,11 +598,13 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
             <div className="bg-white border border-zinc-200 rounded-2xl p-4">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-sm font-black text-zinc-900">Customer Details</h3>
-                <button onClick={() => editingCrm ? saveCrm() : setEditingCrm(true)} disabled={savingCrm}
-                  className="text-xs font-bold text-zinc-500 hover:text-zinc-900 transition cursor-pointer flex items-center gap-1">
-                  <Edit3 className="w-3.5 h-3.5" />
-                  {editingCrm ? (savingCrm ? 'Saving...' : 'Save') : 'Edit'}
-                </button>
+                {!isReadOnly && (
+                  <button onClick={() => editingCrm ? saveCrm() : setEditingCrm(true)} disabled={savingCrm}
+                    className="text-xs font-bold text-zinc-500 hover:text-zinc-900 transition cursor-pointer flex items-center gap-1">
+                    <Edit3 className="w-3.5 h-3.5" />
+                    {editingCrm ? (savingCrm ? 'Saving...' : 'Save') : 'Edit'}
+                  </button>
+                )}
               </div>
 
               <div className="space-y-1 mb-4">
@@ -628,7 +620,7 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
                 )}
               </div>
 
-              {editingCrm ? (
+              {editingCrm && !isReadOnly ? (
                 <div className="space-y-3">
                   {[
                     { label: 'Company / Name', field: 'client_company', placeholder: 'e.g. ABC Landscaping or John Smith' },
@@ -660,8 +652,7 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
                     { icon: <MapPin className="w-4 h-4 text-zinc-300" />, value: portal.client_address },
                   ].map(({ icon, value }, i) => value ? (
                     <div key={i} className="flex items-center gap-2 py-2 border-b border-zinc-50">
-                      {icon}
-                      <span className="text-sm text-zinc-600">{value}</span>
+                      {icon}<span className="text-sm text-zinc-600">{value}</span>
                     </div>
                   ) : null)}
                   {portal.notes && (
@@ -671,7 +662,7 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
                     </div>
                   )}
                   {!portal.client_company && !portal.client_phone && !portal.client_address && !portal.notes && (
-                    <p className="text-sm text-zinc-400 py-2">No additional info. Tap Edit to add.</p>
+                    <p className="text-sm text-zinc-400 py-2">{isReadOnly ? 'No additional info.' : 'No additional info. Tap Edit to add.'}</p>
                   )}
                 </div>
               )}
