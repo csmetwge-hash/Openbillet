@@ -34,6 +34,7 @@ function AcceptInviteContent() {
 
   const acceptInvite = async () => {
     setStatus('accepting');
+    console.log('Accepting invite with:', { inviteId, email });
     try {
       const res = await fetch('/api/accept-invite', {
         method: 'POST',
