@@ -3,18 +3,17 @@ import './globals.css';
 import { SupabaseAuthProvider } from '@/components/SupabaseAuth';
 
 export const metadata: Metadata = {
-  title: 'PortalFlow — Premium Client Workspaces',
-  description: 'High-end client portal environments built for autonomous operators.',
+  title: 'OpenBillet — Premium Client Portals',
+  description: 'Deploy secure client workspaces with milestone tracking, file delivery, proposals, and automated updates.',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html 
-      lang="en" 
+    <html
+      lang="en"
       className="antialiased scroll-smooth selection:bg-black selection:text-white"
-      data-scroll-behavior="smooth"
     >
-      <body 
+      <body
         className="bg-zinc-50 text-zinc-950 font-sans tracking-tight min-h-screen flex flex-col"
         suppressHydrationWarning
       >
