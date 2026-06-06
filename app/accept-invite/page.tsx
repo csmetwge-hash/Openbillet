@@ -15,7 +15,7 @@ function AcceptInviteContent() {
   const [errorMsg, setErrorMsg] = useState('');
   const [authEmail, setAuthEmail] = useState(email || '');
   const [password, setPassword] = useState('');
-  const [isSignUp, setIsSignUp] = useState(false);
+  const [isSignUp, setIsSignUp] = useState(true);
   const [authLoading, setAuthLoading] = useState(false);
 
   useEffect(() => {
@@ -111,7 +111,7 @@ function AcceptInviteContent() {
           </div>
           <h1 className="text-2xl font-black tracking-tight text-zinc-950">You've been invited</h1>
           <p className="text-sm text-zinc-500 font-medium mt-1">
-            {isSignUp ? 'Create an account to accept your invite.' : 'Sign in to accept your invite.'}
+            Create a free account to accept your invite and access the workspace.
           </p>
         </div>
 
