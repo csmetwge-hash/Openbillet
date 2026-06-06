@@ -5,7 +5,7 @@ import { supabase } from '@/lib/supabase';
 import {
   CheckCircle2, Circle, Clock, Send, Download, ExternalLink,
   MessageSquare, Layers, FolderOpen, ClipboardList, Paperclip,
-  X,
+  X, FileText,
 } from 'lucide-react';
 
 interface Portal {
@@ -15,6 +15,7 @@ interface Portal {
   brand_name?: string;
   brand_logo_url?: string;
   magic_token: string;
+  user_id: string;
 }
 
 interface Milestone {
@@ -97,9 +98,7 @@ export default function ClientPortal({ params }: { params: Promise<{ token: stri
     return () => { supabase.removeChannel(channel); };
   }, [portal]);
 
-  useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [notes]);
+  useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [notes]);
 
   const fetchPortal = async () => {
     const { data: portalData, error } = await supabase
@@ -110,21 +109,21 @@ export default function ClientPortal({ params }: { params: Promise<{ token: stri
       .single();
 
     if (error || !portalData) { setNotFound(true); setLoading(false); return; }
-    setPortal(portalData);
 
-    // Fall back to account-level brand settings if portal has no brand
-    if (!portalData.brand_name && !portalData.brand_logo_url) {
+    // Fall back to account-level brand settings
+    if (!portalData.brand_name?.trim() && !portalData.brand_logo_url?.trim()) {
       const { data: settings } = await supabase
         .from('account_settings')
         .select('brand_name, brand_logo_url')
         .eq('user_id', portalData.user_id)
         .maybeSingle();
-
       if (settings) {
         portalData.brand_name = settings.brand_name;
         portalData.brand_logo_url = settings.brand_logo_url;
       }
     }
+
+    setPortal(portalData);
 
     const [ms, fs, ns, ps] = await Promise.all([
       supabase.from('portal_milestones').select('*').eq('portal_id', portalData.id).order('created_at', { ascending: true }),
@@ -147,30 +146,24 @@ export default function ClientPortal({ params }: { params: Promise<{ token: stri
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          portalId: portal.id,
-          actionType,
+          portalId: portal.id, actionType,
           clientName: portal.client_name,
           projectName: portal.project_name,
           detail,
         }),
       });
-    } catch (err) {
-      console.error('Failed to notify admin:', err);
-    }
+    } catch (err) { console.error('Failed to notify admin:', err); }
   };
 
   const sendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!message.trim() || !portal) return;
     const msg = message.trim();
-    await supabase.from('portal_notes').insert({
-      portal_id: portal.id, message: msg, is_from_client: true,
-    });
+    await supabase.from('portal_notes').insert({ portal_id: portal.id, message: msg, is_from_client: true });
     setMessage('');
     notifyAdmin('message', msg);
   };
 
-  // Client can mark their own responsibility milestones as complete
   const toggleClientMilestone = async (m: Milestone) => {
     if (m.responsibility !== 'client') return;
     const newStatus = m.status === 'completed' ? 'incomplete' : 'completed';
@@ -187,18 +180,12 @@ export default function ClientPortal({ params }: { params: Promise<{ token: stri
     if (!signature.trim()) return;
     setSigning(true);
     await supabase.from('portal_proposals').update({
-      status: 'accepted',
-      accepted_at: new Date().toISOString(),
-      accepted_signature: signature.trim(),
+      status: 'accepted', accepted_at: new Date().toISOString(), accepted_signature: signature.trim(),
     }).eq('id', proposalId);
     setProposals(prev => prev.map(p => p.id === proposalId
-      ? { ...p, status: 'accepted', accepted_signature: signature.trim(), accepted_at: new Date().toISOString() }
-      : p
-    ));
+      ? { ...p, status: 'accepted', accepted_signature: signature.trim(), accepted_at: new Date().toISOString() } : p));
     notifyAdmin('proposal_accepted', `Proposal: "${proposalTitle}" — Signed by: ${signature.trim()}`);
-    setSigningProposal(null);
-    setSignature('');
-    setSigning(false);
+    setSigningProposal(null); setSignature(''); setSigning(false);
   };
 
   const declineProposal = async (proposalId: string, proposalTitle: string) => {
@@ -206,9 +193,7 @@ export default function ClientPortal({ params }: { params: Promise<{ token: stri
     await supabase.from('portal_proposals').update({ status: 'declined' }).eq('id', proposalId);
     setProposals(prev => prev.map(p => p.id === proposalId ? { ...p, status: 'declined' } : p));
     notifyAdmin('proposal_declined', `Proposal: "${proposalTitle}"${declineReason ? ` — Reason: ${declineReason}` : ''}`);
-    setDecliningProposal(null);
-    setDeclineReason('');
-    setDeclining(false);
+    setDecliningProposal(null); setDeclineReason(''); setDeclining(false);
   };
 
   const completedCount = milestones.filter(m => m.status === 'completed').length;
@@ -281,8 +266,7 @@ export default function ClientPortal({ params }: { params: Promise<{ token: stri
                 className={`flex items-center gap-1.5 px-3 py-2.5 rounded-xl text-xs font-bold whitespace-nowrap transition cursor-pointer ${
                   activeTab === tab.key ? 'bg-zinc-950 text-white' : 'text-zinc-500 hover:text-zinc-800 hover:bg-zinc-50'
                 }`}>
-                {tab.icon}
-                {tab.label}
+                {tab.icon}{tab.label}
                 {tab.badge ? (
                   <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-full ${activeTab === tab.key ? 'bg-white text-zinc-900' : 'bg-zinc-200 text-zinc-700'}`}>
                     {tab.badge}
@@ -306,13 +290,12 @@ export default function ClientPortal({ params }: { params: Promise<{ token: stri
                 <p className="text-sm font-medium">No milestones yet</p>
               </div>
             ) : milestones.map(m => (
-              <div key={m.id} className={`bg-white rounded-2xl border p-4 transition ${m.status === 'completed' ? 'border-zinc-100 opacity-70' : 'border-zinc-200'}`}>
+              <div key={m.id} className={`bg-white rounded-2xl border p-4 transition ${m.status === 'completed' ? 'border-zinc-100 opacity-80' : 'border-zinc-200'}`}>
                 <div className="flex items-start gap-3">
-                  {/* Clickable circle for client-responsibility milestones */}
+                  {/* Status icon — clickable for client-responsibility milestones */}
                   {m.responsibility === 'client' && m.status !== 'completed' ? (
                     <button onClick={() => toggleClientMilestone(m)}
-                      className="shrink-0 mt-0.5 w-5 h-5 rounded-full border-2 border-zinc-400 hover:border-zinc-700 hover:bg-zinc-100 transition cursor-pointer flex items-center justify-center">
-                    </button>
+                      className="shrink-0 mt-0.5 w-5 h-5 rounded-full border-2 border-zinc-400 hover:border-zinc-700 hover:bg-zinc-100 transition cursor-pointer flex items-center justify-center" />
                   ) : m.status === 'completed' ? (
                     m.responsibility === 'client' ? (
                       <button onClick={() => toggleClientMilestone(m)} className="shrink-0 mt-0.5 cursor-pointer">
@@ -344,15 +327,10 @@ export default function ClientPortal({ params }: { params: Promise<{ token: stri
                     )}
 
                     {m.responsibility === 'client' && m.status !== 'completed' && (
-                      <p className="text-[11px] text-amber-600 font-semibold mt-1">Action required from you — tap to mark complete</p>
+                      <p className="text-[11px] text-amber-600 font-semibold mt-1">Action required — tap to mark complete</p>
                     )}
 
-                    {/* Amount display */}
-                    {m.amount && !m.payment_link && (
-                      <p className="text-sm font-bold text-zinc-700 mt-2">{m.amount}</p>
-                    )}
-
-                    {/* Amount + payment link together */}
+                    {/* Amount + payment link */}
                     {m.amount && m.payment_link && (
                       <div className="mt-3 flex items-center gap-3 flex-wrap">
                         <span className="text-sm font-bold text-zinc-700">{m.amount}</span>
@@ -362,13 +340,29 @@ export default function ClientPortal({ params }: { params: Promise<{ token: stri
                         </a>
                       </div>
                     )}
-
-                    {/* Payment link only (no amount) */}
+                    {m.amount && !m.payment_link && (
+                      <p className="text-sm font-bold text-zinc-700 mt-2">{m.amount}</p>
+                    )}
                     {!m.amount && m.payment_link && (
                       <div className="mt-3">
                         <a href={m.payment_link} target="_blank" rel="noopener noreferrer"
                           className="inline-flex items-center gap-2 bg-zinc-900 text-white text-xs font-bold px-4 py-2.5 rounded-xl hover:bg-zinc-700 transition">
                           Pay Now <ExternalLink className="w-3.5 h-3.5" />
+                        </a>
+                      </div>
+                    )}
+
+                    {/* Receipt button for completed milestones */}
+                    {m.status === 'completed' && (
+                      <div className="mt-3">
+                        <a
+                          href={`/receipt/${m.id}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1.5 text-[11px] font-bold text-zinc-400 hover:text-zinc-700 transition"
+                        >
+                          <FileText className="w-3.5 h-3.5" />
+                          View Receipt
                         </a>
                       </div>
                     )}
