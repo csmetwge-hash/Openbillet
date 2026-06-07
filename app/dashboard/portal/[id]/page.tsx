@@ -75,6 +75,10 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
   const [lineItems, setLineItems] = useState([{ description: '', quantity: 1, unit_price: 0 }]);
   const [savingProposal, setSavingProposal] = useState(false);
 
+  // Invoice
+  const [showInvoiceModal, setShowInvoiceModal] = useState(false);
+  const [invoiceSelected, setInvoiceSelected] = useState<Record<string, boolean>>({});
+
   // CRM
   const [editingCrm, setEditingCrm] = useState(false);
   const [crmFields, setCrmFields] = useState({ client_phone: '', client_company: '', client_address: '', notes: '' });
@@ -250,8 +254,6 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
     if (newStatus === 'completed') {
       await logActivity('milestone_completed', `Milestone completed: ${title}`);
       await notifyClient('milestone_completed', title);
-    } else if (newStatus === 'in_progress') {
-      await logActivity('milestone_completed', `Milestone in progress: ${title}`);
     }
   };
 
@@ -308,7 +310,7 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
     setShowTemplateMenu(false);
     const inserts = template.milestones.map((m: any) => ({
       portal_id: portalId, title: m.title, description: m.description || null,
-      amount: null, payment_link: null,
+      amount: m.amount || null, payment_link: m.payment_link || null,
       responsibility: m.responsibility || 'provider', status: 'incomplete',
     }));
     await supabase.from('portal_milestones').insert(inserts);
@@ -382,6 +384,24 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
     await notifyClient('proposal_sent', title);
   };
 
+  // ── Invoice ──────────────────────────────────────────────
+  const openInvoiceModal = () => {
+    const preSelected: Record<string, boolean> = {};
+    milestones.forEach(m => { preSelected[m.id] = m.status === 'completed'; });
+    setInvoiceSelected(preSelected);
+    setShowInvoiceModal(true);
+  };
+
+  const generateInvoice = () => {
+    const selectedIds = Object.entries(invoiceSelected)
+      .filter(([_, checked]) => checked)
+      .map(([id]) => id)
+      .join(',');
+    if (!selectedIds) return;
+    window.open(`/invoice/${portalId}?milestones=${selectedIds}`, '_blank');
+    setShowInvoiceModal(false);
+  };
+
   // ── CRM ──────────────────────────────────────────────────
   const saveCrm = async () => {
     if (isReadOnly) return;
@@ -423,7 +443,70 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
     <div ref={pageTopRef} className="min-h-screen bg-zinc-50 font-sans antialiased">
       <input ref={photoInputRef} type="file" accept="image/*" className="hidden" onChange={handlePhotoUpload} />
 
-      {/* Header */}
+      {/* Invoice Modal */}
+      {showInvoiceModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl border border-zinc-200 space-y-4 max-h-[80vh] flex flex-col">
+            <div className="flex items-center justify-between">
+              <h2 className="text-base font-black text-zinc-900">Generate Invoice</h2>
+              <button onClick={() => setShowInvoiceModal(false)} className="text-zinc-400 hover:text-zinc-700 transition cursor-pointer">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <p className="text-xs text-zinc-500">Select milestones to include in the invoice.</p>
+            <div className="flex gap-3 text-xs font-bold">
+              <button onClick={() => {
+                const all: Record<string, boolean> = {};
+                milestones.forEach(m => { all[m.id] = true; });
+                setInvoiceSelected(all);
+              }} className="text-zinc-600 hover:text-zinc-900 transition cursor-pointer underline">
+                Select all
+              </button>
+              <button onClick={() => setInvoiceSelected({})}
+                className="text-zinc-400 hover:text-zinc-600 transition cursor-pointer underline">
+                Clear
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto space-y-2 pr-1">
+              {milestones.length === 0 ? (
+                <p className="text-sm text-zinc-400 text-center py-8">No milestones yet.</p>
+              ) : milestones.map(m => (
+                <label key={m.id} className="flex items-start gap-3 p-3 rounded-xl border border-zinc-100 hover:bg-zinc-50 transition cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={!!invoiceSelected[m.id]}
+                    onChange={e => setInvoiceSelected(prev => ({ ...prev, [m.id]: e.target.checked }))}
+                    className="mt-0.5 shrink-0 accent-zinc-900 w-4 h-4 cursor-pointer"
+                  />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold text-zinc-900 truncate">{m.title}</p>
+                    <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                      <span className={`text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded-full ${
+                        m.status === 'completed' ? 'bg-emerald-50 text-emerald-600'
+                        : m.status === 'in_progress' ? 'bg-amber-50 text-amber-600'
+                        : 'bg-zinc-100 text-zinc-500'
+                      }`}>{m.status.replace('_', ' ')}</span>
+                      {m.amount && <span className="text-[10px] font-bold text-zinc-600">{m.amount}</span>}
+                    </div>
+                  </div>
+                </label>
+              ))}
+            </div>
+            <div className="flex gap-2 pt-2 border-t border-zinc-100">
+              <button
+                onClick={generateInvoice}
+                disabled={Object.values(invoiceSelected).every(v => !v)}
+                className="flex-1 bg-zinc-900 text-white py-3 rounded-xl text-sm font-bold hover:bg-zinc-700 transition cursor-pointer disabled:opacity-40">
+                Preview Invoice
+              </button>
+              <button onClick={() => setShowInvoiceModal(false)}
+                className="px-4 py-3 border border-zinc-200 rounded-xl text-sm font-semibold text-zinc-600 hover:bg-zinc-50 transition cursor-pointer">
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       <div className="bg-white border-b border-zinc-200 sticky top-0 z-40">
         <div className="max-w-4xl mx-auto px-4 py-4 flex items-center justify-between gap-3">
           <div className="flex items-center gap-3 min-w-0">
@@ -463,6 +546,14 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
                 className="p-2 border border-zinc-200 rounded-xl hover:bg-zinc-50 transition cursor-pointer disabled:opacity-40"
                 title={portal.status === 'archived' ? 'Restore portal' : 'Archive portal'}>
                 {portal.status === 'archived' ? <RotateCcw className="w-4 h-4 text-zinc-500" /> : <Archive className="w-4 h-4 text-zinc-500" />}
+              </button>
+            )}
+            {/* Generate Invoice */}
+            {!isReadOnly && (
+              <button onClick={openInvoiceModal}
+                className="p-2 border border-zinc-200 rounded-xl hover:bg-zinc-50 transition cursor-pointer"
+                title="Generate invoice">
+                <FileText className="w-4 h-4 text-zinc-500" />
               </button>
             )}
           </div>
