@@ -250,6 +250,8 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
     if (newStatus === 'completed') {
       await logActivity('milestone_completed', `Milestone completed: ${title}`);
       await notifyClient('milestone_completed', title);
+    } else if (newStatus === 'in_progress') {
+      await logActivity('milestone_completed', `Milestone in progress: ${title}`);
     }
   };
 
@@ -306,7 +308,7 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
     setShowTemplateMenu(false);
     const inserts = template.milestones.map((m: any) => ({
       portal_id: portalId, title: m.title, description: m.description || null,
-      amount: m.amount || null, payment_link: m.payment_link || null,
+      amount: null, payment_link: null,
       responsibility: m.responsibility || 'provider', status: 'incomplete',
     }));
     await supabase.from('portal_milestones').insert(inserts);
