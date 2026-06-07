@@ -26,6 +26,8 @@ interface Milestone {
   payment_link?: string;
   status: string;
   responsibility: string;
+  photo_before_url?: string;
+  photo_after_url?: string;
 }
 
 interface PortalFile {
@@ -77,7 +79,6 @@ export default function ClientPortal({ params }: { params: Promise<{ token: stri
   const [signingProposal, setSigningProposal] = useState<string | null>(null);
   const [signature, setSignature] = useState('');
   const [signing, setSigning] = useState(false);
-
   const [decliningProposal, setDecliningProposal] = useState<string | null>(null);
   const [declineReason, setDeclineReason] = useState('');
   const [declining, setDeclining] = useState(false);
@@ -102,25 +103,15 @@ export default function ClientPortal({ params }: { params: Promise<{ token: stri
 
   const fetchPortal = async () => {
     const { data: portalData, error } = await supabase
-      .from('client_portals')
-      .select('*')
-      .eq('magic_token', token)
-      .eq('status', 'active')
-      .single();
+      .from('client_portals').select('*').eq('magic_token', token).eq('status', 'active').maybeSingle();
 
     if (error || !portalData) { setNotFound(true); setLoading(false); return; }
 
-    // Fall back to account-level brand settings
     if (!portalData.brand_name?.trim() && !portalData.brand_logo_url?.trim()) {
       const { data: settings } = await supabase
-        .from('account_settings')
-        .select('brand_name, brand_logo_url')
-        .eq('user_id', portalData.user_id)
-        .maybeSingle();
-      if (settings) {
-        portalData.brand_name = settings.brand_name;
-        portalData.brand_logo_url = settings.brand_logo_url;
-      }
+        .from('account_settings').select('brand_name, brand_logo_url')
+        .eq('user_id', portalData.user_id).maybeSingle();
+      if (settings) { portalData.brand_name = settings.brand_name; portalData.brand_logo_url = settings.brand_logo_url; }
     }
 
     setPortal(portalData);
@@ -145,12 +136,7 @@ export default function ClientPortal({ params }: { params: Promise<{ token: stri
       await fetch('/api/notify-admin', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          portalId: portal.id, actionType,
-          clientName: portal.client_name,
-          projectName: portal.project_name,
-          detail,
-        }),
+        body: JSON.stringify({ portalId: portal.id, actionType, clientName: portal.client_name, projectName: portal.project_name, detail }),
       });
     } catch (err) { console.error('Failed to notify admin:', err); }
   };
@@ -290,83 +276,83 @@ export default function ClientPortal({ params }: { params: Promise<{ token: stri
                 <p className="text-sm font-medium">No milestones yet</p>
               </div>
             ) : milestones.map(m => (
-              <div key={m.id} className={`bg-white rounded-2xl border p-4 transition ${m.status === 'completed' ? 'border-zinc-100 opacity-80' : 'border-zinc-200'}`}>
-                <div className="flex items-start gap-3">
-                  {/* Status icon — clickable for client-responsibility milestones */}
-                  {m.responsibility === 'client' && m.status !== 'completed' ? (
-                    <button onClick={() => toggleClientMilestone(m)}
-                      className="shrink-0 mt-0.5 w-5 h-5 rounded-full border-2 border-zinc-400 hover:border-zinc-700 hover:bg-zinc-100 transition cursor-pointer flex items-center justify-center" />
-                  ) : m.status === 'completed' ? (
-                    m.responsibility === 'client' ? (
-                      <button onClick={() => toggleClientMilestone(m)} className="shrink-0 mt-0.5 cursor-pointer">
-                        <CheckCircle2 className="w-5 h-5 text-emerald-500" />
-                      </button>
+              <div key={m.id} className={`bg-white rounded-2xl border overflow-hidden transition ${m.status === 'completed' ? 'border-zinc-100 opacity-80' : 'border-zinc-200'}`}>
+                <div className="p-4">
+                  <div className="flex items-start gap-3">
+                    {m.responsibility === 'client' && m.status !== 'completed' ? (
+                      <button onClick={() => toggleClientMilestone(m)}
+                        className="shrink-0 mt-0.5 w-5 h-5 rounded-full border-2 border-zinc-400 hover:border-zinc-700 hover:bg-zinc-100 transition cursor-pointer" />
+                    ) : m.status === 'completed' ? (
+                      m.responsibility === 'client' ? (
+                        <button onClick={() => toggleClientMilestone(m)} className="shrink-0 mt-0.5 cursor-pointer">
+                          <CheckCircle2 className="w-5 h-5 text-emerald-500" />
+                        </button>
+                      ) : <CheckCircle2 className="w-5 h-5 text-emerald-500 shrink-0 mt-0.5" />
+                    ) : m.status === 'in_progress' ? (
+                      <Clock className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
                     ) : (
-                      <CheckCircle2 className="w-5 h-5 text-emerald-500 shrink-0 mt-0.5" />
-                    )
-                  ) : m.status === 'in_progress' ? (
-                    <Clock className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
-                  ) : (
-                    <Circle className="w-5 h-5 text-zinc-300 shrink-0 mt-0.5" />
-                  )}
+                      <Circle className="w-5 h-5 text-zinc-300 shrink-0 mt-0.5" />
+                    )}
 
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-start justify-between gap-2">
-                      <p className={`text-sm font-semibold ${m.status === 'completed' ? 'line-through text-zinc-400' : 'text-zinc-900'}`}>
-                        {m.title}
-                      </p>
-                      <span className={`shrink-0 text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full ${
-                        m.status === 'completed' ? 'bg-emerald-50 text-emerald-600'
-                        : m.status === 'in_progress' ? 'bg-amber-50 text-amber-600'
-                        : 'bg-zinc-100 text-zinc-500'
-                      }`}>{m.status.replace('_', ' ')}</span>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-start justify-between gap-2">
+                        <p className={`text-sm font-semibold ${m.status === 'completed' ? 'line-through text-zinc-400' : 'text-zinc-900'}`}>{m.title}</p>
+                        <span className={`shrink-0 text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full ${
+                          m.status === 'completed' ? 'bg-emerald-50 text-emerald-600'
+                          : m.status === 'in_progress' ? 'bg-amber-50 text-amber-600'
+                          : 'bg-zinc-100 text-zinc-500'
+                        }`}>{m.status.replace('_', ' ')}</span>
+                      </div>
+                      {m.description && <p className="text-xs text-zinc-500 mt-1 leading-relaxed">{m.description}</p>}
+                      {m.responsibility === 'client' && m.status !== 'completed' && (
+                        <p className="text-[11px] text-amber-600 font-semibold mt-1">Action required — tap to mark complete</p>
+                      )}
+                      {m.amount && m.payment_link && (
+                        <div className="mt-3 flex items-center gap-3 flex-wrap">
+                          <span className="text-sm font-bold text-zinc-700">{m.amount}</span>
+                          <a href={m.payment_link} target="_blank" rel="noopener noreferrer"
+                            className="inline-flex items-center gap-2 bg-zinc-900 text-white text-xs font-bold px-4 py-2 rounded-xl hover:bg-zinc-700 transition">
+                            Pay Now <ExternalLink className="w-3.5 h-3.5" />
+                          </a>
+                        </div>
+                      )}
+                      {m.amount && !m.payment_link && <p className="text-sm font-bold text-zinc-700 mt-2">{m.amount}</p>}
+                      {!m.amount && m.payment_link && (
+                        <div className="mt-3">
+                          <a href={m.payment_link} target="_blank" rel="noopener noreferrer"
+                            className="inline-flex items-center gap-2 bg-zinc-900 text-white text-xs font-bold px-4 py-2.5 rounded-xl hover:bg-zinc-700 transition">
+                            Pay Now <ExternalLink className="w-3.5 h-3.5" />
+                          </a>
+                        </div>
+                      )}
+                      {m.status === 'completed' && (
+                        <div className="mt-3">
+                          <a href={`/receipt/${m.id}`} target="_blank" rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1.5 text-[11px] font-bold text-zinc-400 hover:text-zinc-700 transition">
+                            <FileText className="w-3.5 h-3.5" /> View Receipt
+                          </a>
+                        </div>
+                      )}
                     </div>
-
-                    {m.description && (
-                      <p className="text-xs text-zinc-500 mt-1 leading-relaxed">{m.description}</p>
-                    )}
-
-                    {m.responsibility === 'client' && m.status !== 'completed' && (
-                      <p className="text-[11px] text-amber-600 font-semibold mt-1">Action required — tap to mark complete</p>
-                    )}
-
-                    {/* Amount + payment link */}
-                    {m.amount && m.payment_link && (
-                      <div className="mt-3 flex items-center gap-3 flex-wrap">
-                        <span className="text-sm font-bold text-zinc-700">{m.amount}</span>
-                        <a href={m.payment_link} target="_blank" rel="noopener noreferrer"
-                          className="inline-flex items-center gap-2 bg-zinc-900 text-white text-xs font-bold px-4 py-2 rounded-xl hover:bg-zinc-700 transition">
-                          Pay Now <ExternalLink className="w-3.5 h-3.5" />
-                        </a>
-                      </div>
-                    )}
-                    {m.amount && !m.payment_link && (
-                      <p className="text-sm font-bold text-zinc-700 mt-2">{m.amount}</p>
-                    )}
-                    {!m.amount && m.payment_link && (
-                      <div className="mt-3">
-                        <a href={m.payment_link} target="_blank" rel="noopener noreferrer"
-                          className="inline-flex items-center gap-2 bg-zinc-900 text-white text-xs font-bold px-4 py-2.5 rounded-xl hover:bg-zinc-700 transition">
-                          Pay Now <ExternalLink className="w-3.5 h-3.5" />
-                        </a>
-                      </div>
-                    )}
-
-                    {/* Receipt button for completed milestones */}
-                    {m.status === 'completed' && (
-                      <div className="mt-3">
-                        <a
-                          href={`/receipt/${m.id}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1.5 text-[11px] font-bold text-zinc-400 hover:text-zinc-700 transition"
-                        >
-                          <FileText className="w-3.5 h-3.5" />
-                          View Receipt
-                        </a>
-                      </div>
-                    )}
                   </div>
+
+                  {/* Before/After photos */}
+                  {(m.photo_before_url || m.photo_after_url) && (
+                    <div className="mt-4 grid grid-cols-2 gap-3">
+                      {m.photo_before_url && (
+                        <div>
+                          <p className="text-[9px] font-bold uppercase tracking-wider text-zinc-400 mb-1.5">Before</p>
+                          <img src={m.photo_before_url} alt="Before" className="w-full h-32 object-cover rounded-xl border border-zinc-100" />
+                        </div>
+                      )}
+                      {m.photo_after_url && (
+                        <div>
+                          <p className="text-[9px] font-bold uppercase tracking-wider text-zinc-400 mb-1.5">After</p>
+                          <img src={m.photo_after_url} alt="After" className="w-full h-32 object-cover rounded-xl border border-zinc-100" />
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
             ))}
@@ -384,9 +370,7 @@ export default function ClientPortal({ params }: { params: Promise<{ token: stri
             ) : files.map(file => (
               <div key={file.id} className="bg-white border border-zinc-200 rounded-2xl p-4 flex items-center justify-between gap-3">
                 <div className="flex items-center gap-3 min-w-0">
-                  <div className="p-2 bg-zinc-100 rounded-xl shrink-0">
-                    <Paperclip className="w-4 h-4 text-zinc-500" />
-                  </div>
+                  <div className="p-2 bg-zinc-100 rounded-xl shrink-0"><Paperclip className="w-4 h-4 text-zinc-500" /></div>
                   <div className="min-w-0">
                     <p className="text-sm font-semibold text-zinc-900 truncate">{file.file_name}</p>
                     <span className={`text-[10px] font-bold uppercase tracking-wider ${file.status === 'approved' ? 'text-emerald-600' : 'text-amber-600'}`}>
@@ -461,9 +445,7 @@ export default function ClientPortal({ params }: { params: Promise<{ token: stri
                     proposal.status === 'accepted' ? 'bg-emerald-50 text-emerald-600'
                     : proposal.status === 'declined' ? 'bg-red-50 text-red-600'
                     : 'bg-amber-50 text-amber-600'
-                  }`}>
-                    {proposal.status === 'sent' ? 'Awaiting Review' : proposal.status}
-                  </span>
+                  }`}>{proposal.status === 'sent' ? 'Awaiting Review' : proposal.status}</span>
                 </div>
 
                 {proposal.line_items && proposal.line_items.length > 0 && (
@@ -471,9 +453,7 @@ export default function ClientPortal({ params }: { params: Promise<{ token: stri
                     {proposal.line_items.map(item => (
                       <div key={item.id} className="flex items-center justify-between text-sm">
                         <span className="text-zinc-700">{item.description}</span>
-                        <span className="font-semibold text-zinc-900 shrink-0 ml-4">
-                          ${(item.quantity * item.unit_price).toLocaleString()}
-                        </span>
+                        <span className="font-semibold text-zinc-900 shrink-0 ml-4">${(item.quantity * item.unit_price).toLocaleString()}</span>
                       </div>
                     ))}
                     <div className="flex justify-between items-center pt-2 border-t border-zinc-100">
@@ -511,14 +491,12 @@ export default function ClientPortal({ params }: { params: Promise<{ token: stri
                       </div>
                     ) : decliningProposal === proposal.id ? (
                       <div className="space-y-3">
-                        <p className="text-xs text-zinc-500 font-medium">Let us know why (optional) — we'll follow up shortly.</p>
+                        <p className="text-xs text-zinc-500 font-medium">Let us know why (optional).</p>
                         <textarea value={declineReason} onChange={e => setDeclineReason(e.target.value)}
-                          placeholder="e.g. Budget concerns, need to discuss scope..."
-                          rows={3}
+                          placeholder="e.g. Budget concerns..." rows={3}
                           className="w-full border border-zinc-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-zinc-900 transition resize-none" />
                         <div className="flex gap-2">
-                          <button onClick={() => declineProposal(proposal.id, proposal.title)}
-                            disabled={declining}
+                          <button onClick={() => declineProposal(proposal.id, proposal.title)} disabled={declining}
                             className="flex-1 bg-red-600 text-white py-3 rounded-xl text-sm font-bold disabled:opacity-40 hover:bg-red-700 transition cursor-pointer">
                             {declining ? 'Submitting...' : 'Confirm Decline'}
                           </button>
@@ -540,7 +518,7 @@ export default function ClientPortal({ params }: { params: Promise<{ token: stri
                         </button>
                         <p className="text-center text-xs text-zinc-400 pt-1">
                           Have questions?{' '}
-                          <button onClick={() => setActiveTab('messages')} className="text-zinc-700 font-semibold underline cursor-pointer hover:text-zinc-900 transition">
+                          <button onClick={() => setActiveTab('messages')} className="text-zinc-700 font-semibold underline cursor-pointer">
                             Send us a message
                           </button>
                         </p>
