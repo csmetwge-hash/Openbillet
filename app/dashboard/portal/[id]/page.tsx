@@ -98,6 +98,7 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
     const { ownerId, role } = await resolveWorkspaceAccess();
     if (!ownerId) { router.push('/auth'); return; }
     setUserRole(role);
+    console.log('userRole:', role, 'ownerId:', ownerId);
 
     const { data: portalData, error } = await supabase
       .from('client_portals').select('*').eq('id', portalId).eq('user_id', ownerId).single();
