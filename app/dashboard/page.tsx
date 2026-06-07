@@ -6,7 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import {
   Plus, Copy, ExternalLink, LogOut, CheckCircle2,
   LayoutGrid, Users, CreditCard, X, Lock, MessageSquare,
-  Settings, ArrowRight,
+  Settings, ArrowRight, Archive, RotateCcw,
 } from 'lucide-react';
 import { resolveWorkspaceAccess } from '@/lib/workspace';
 
@@ -77,10 +77,9 @@ function CreatePortalModal({
     setCreating(true);
     setError('');
 
+    const { data: { user: currentUser } } = await supabase.auth.getUser();
     const magicToken = Array.from(crypto.getRandomValues(new Uint8Array(16)))
       .map(b => b.toString(16).padStart(2, '0')).join('');
-
-    const { data: { user: currentUser } } = await supabase.auth.getUser();
 
     const { data, error } = await supabase
       .from('client_portals')
@@ -124,55 +123,36 @@ function CreatePortalModal({
             <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-1">
               Client Name <span className="text-red-400">*</span>
             </label>
-            <input
-              type="text"
-              required
-              placeholder="e.g. John Smith or ABC Landscaping"
-              value={clientName}
-              onChange={e => setClientName(e.target.value)}
+            <input type="text" required placeholder="e.g. John Smith or ABC Landscaping"
+              value={clientName} onChange={e => setClientName(e.target.value)}
               className="w-full border border-zinc-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-zinc-900 transition"
-              autoFocus
-            />
+              autoFocus />
           </div>
           <div>
             <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-1">
               Project Name <span className="text-zinc-300">optional</span>
             </label>
-            <input
-              type="text"
-              placeholder="e.g. Spring Lawn Treatment"
-              value={projectName}
-              onChange={e => setProjectName(e.target.value)}
-              className="w-full border border-zinc-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-zinc-900 transition"
-            />
+            <input type="text" placeholder="e.g. Spring Lawn Treatment"
+              value={projectName} onChange={e => setProjectName(e.target.value)}
+              className="w-full border border-zinc-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-zinc-900 transition" />
           </div>
           <div>
             <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-1">
               Client Email <span className="text-zinc-300">optional</span>
             </label>
-            <input
-              type="email"
-              placeholder="client@example.com"
-              value={clientEmail}
-              onChange={e => setClientEmail(e.target.value)}
-              className="w-full border border-zinc-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-zinc-900 transition"
-            />
+            <input type="email" placeholder="client@example.com"
+              value={clientEmail} onChange={e => setClientEmail(e.target.value)}
+              className="w-full border border-zinc-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-zinc-900 transition" />
             <p className="text-[10px] text-zinc-400 mt-1">Used for automated notifications and receipts.</p>
           </div>
           <div className="flex gap-2 pt-1">
-            <button
-              type="submit"
-              disabled={creating || !clientName.trim()}
-              className="flex-1 bg-zinc-900 text-white py-3 rounded-xl text-sm font-bold hover:bg-zinc-700 transition cursor-pointer disabled:opacity-40 flex items-center justify-center gap-2"
-            >
+            <button type="submit" disabled={creating || !clientName.trim()}
+              className="flex-1 bg-zinc-900 text-white py-3 rounded-xl text-sm font-bold hover:bg-zinc-700 transition cursor-pointer disabled:opacity-40 flex items-center justify-center gap-2">
               {creating ? 'Creating...' : 'Create Portal'}
               {!creating && <ArrowRight className="w-4 h-4" />}
             </button>
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-3 border border-zinc-200 rounded-xl text-sm font-semibold text-zinc-600 hover:bg-zinc-50 transition cursor-pointer"
-            >
+            <button type="button" onClick={onClose}
+              className="px-4 py-3 border border-zinc-200 rounded-xl text-sm font-semibold text-zinc-600 hover:bg-zinc-50 transition cursor-pointer">
               Cancel
             </button>
           </div>
@@ -184,6 +164,7 @@ function CreatePortalModal({
 
 function DashboardContent() {
   const [portals, setPortals] = useState<any[]>([]);
+  const [archivedPortals, setArchivedPortals] = useState<any[]>([]);
   const [portalMeta, setPortalMeta] = useState<Record<string, PortalMeta>>({});
   const [user, setUser] = useState<any>(null);
   const [ownerId, setOwnerId] = useState<string | null>(null);
@@ -194,6 +175,7 @@ function DashboardContent() {
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [view, setView] = useState<'active' | 'archived'>('active');
 
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -213,7 +195,6 @@ function DashboardContent() {
     const { ownerId, role } = await resolveWorkspaceAccess();
     setOwnerId(ownerId);
     setUserRole(role);
-
     if (!ownerId) { router.push('/auth'); return; }
 
     await Promise.all([fetchPortals(ownerId), fetchSubscription(ownerId)]);
@@ -221,18 +202,21 @@ function DashboardContent() {
   };
 
   const fetchPortals = async (ownerIdParam: string) => {
-    const { data } = await supabase
-      .from('client_portals')
-      .select('*')
-      .eq('user_id', ownerIdParam)
-      .eq('status', 'active')
+    const { data: activeData } = await supabase
+      .from('client_portals').select('*').eq('user_id', ownerIdParam).eq('status', 'active')
       .order('created_at', { ascending: false });
-    const portals = data || [];
-    setPortals(portals);
 
-    if (portals.length > 0) {
+    const { data: archivedData } = await supabase
+      .from('client_portals').select('*').eq('user_id', ownerIdParam).eq('status', 'archived')
+      .order('created_at', { ascending: false });
+
+    const active = activeData || [];
+    setPortals(active);
+    setArchivedPortals(archivedData || []);
+
+    if (active.length > 0) {
       const meta: Record<string, PortalMeta> = {};
-      await Promise.all(portals.map(async (p) => {
+      await Promise.all(active.map(async (p) => {
         const [notesRes, proposalsRes] = await Promise.all([
           supabase.from('portal_notes').select('message, created_at', { count: 'exact' })
             .eq('portal_id', p.id).eq('is_from_client', true)
@@ -252,11 +236,24 @@ function DashboardContent() {
 
   const fetchSubscription = async (ownerIdParam: string) => {
     const { data } = await supabase
-      .from('manager_subscriptions')
-      .select('tier_level, subscription_status')
-      .eq('user_id', ownerIdParam)
-      .maybeSingle();
+      .from('manager_subscriptions').select('tier_level, subscription_status')
+      .eq('user_id', ownerIdParam).maybeSingle();
     setSubscription(data);
+  };
+
+  const restorePortal = async (portalId: string) => {
+    const res = await fetch('/api/archive-portal', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ portalId, action: 'restore' }),
+    });
+    if (res.ok) {
+      const restored = archivedPortals.find(p => p.id === portalId);
+      if (restored) {
+        setArchivedPortals(prev => prev.filter(p => p.id !== portalId));
+        setPortals(prev => [{ ...restored, status: 'active' }, ...prev]);
+      }
+    }
   };
 
   const tier = subscription?.tier_level || 'none';
@@ -305,11 +302,7 @@ function DashboardContent() {
         <UpgradeModal onClose={() => setShowUpgradeModal(false)} onUpgrade={() => router.push('/billing')} />
       )}
       {showCreateModal && ownerId && (
-        <CreatePortalModal
-          ownerId={ownerId}
-          onClose={() => setShowCreateModal(false)}
-          onCreated={handlePortalCreated}
-        />
+        <CreatePortalModal ownerId={ownerId} onClose={() => setShowCreateModal(false)} onCreated={handlePortalCreated} />
       )}
 
       <div className="min-h-screen bg-zinc-50/50 p-4 md:p-12 font-sans antialiased">
@@ -394,87 +387,140 @@ function DashboardContent() {
             </div>
           </div>
 
-          {/* Portal grid */}
-          {portals.length === 0 ? (
-            <div className="text-center py-20 border border-dashed border-zinc-300 bg-white rounded-3xl max-w-xl mx-auto">
-              <div className="inline-flex p-3.5 bg-zinc-50 border border-zinc-100 rounded-2xl mb-4">
-                <Users className="w-6 h-6 text-zinc-400" />
+          {/* Active / Archived toggle */}
+          <div className="flex gap-2">
+            <button onClick={() => setView('active')}
+              className={`text-xs font-bold px-4 py-2 rounded-xl transition cursor-pointer ${view === 'active' ? 'bg-zinc-950 text-white' : 'bg-white border border-zinc-200 text-zinc-500 hover:text-zinc-800'}`}>
+              Active {portals.length > 0 && <span className="ml-1 opacity-60">({portals.length})</span>}
+            </button>
+            <button onClick={() => setView('archived')}
+              className={`text-xs font-bold px-4 py-2 rounded-xl transition cursor-pointer flex items-center gap-1.5 ${view === 'archived' ? 'bg-zinc-950 text-white' : 'bg-white border border-zinc-200 text-zinc-500 hover:text-zinc-800'}`}>
+              <Archive className="w-3.5 h-3.5" /> Archived {archivedPortals.length > 0 && <span className="ml-0.5 opacity-60">({archivedPortals.length})</span>}
+            </button>
+          </div>
+
+          {/* ACTIVE PORTALS */}
+          {view === 'active' && (
+            portals.length === 0 ? (
+              <div className="text-center py-20 border border-dashed border-zinc-300 bg-white rounded-3xl max-w-xl mx-auto">
+                <div className="inline-flex p-3.5 bg-zinc-50 border border-zinc-100 rounded-2xl mb-4">
+                  <Users className="w-6 h-6 text-zinc-400" />
+                </div>
+                <p className="text-base font-bold text-zinc-900">No portals yet</p>
+                <p className="text-xs text-zinc-500 font-medium max-w-xs mx-auto mt-1 mb-6">Create your first client workspace to get started.</p>
+                {!isReadOnly && (
+                  isSubscriptionActive ? (
+                    <button onClick={handleNewPortal}
+                      className="bg-zinc-950 hover:bg-zinc-800 text-white text-xs font-bold px-5 py-3 rounded-xl transition cursor-pointer">
+                      Create First Portal
+                    </button>
+                  ) : isOwner ? (
+                    <button onClick={() => router.push('/pricing')}
+                      className="bg-zinc-950 hover:bg-zinc-800 text-white text-xs font-bold px-5 py-3 rounded-xl transition cursor-pointer">
+                      View Pricing Plans
+                    </button>
+                  ) : null
+                )}
               </div>
-              <p className="text-base font-bold text-zinc-900">No portals yet</p>
-              <p className="text-xs text-zinc-500 font-medium max-w-xs mx-auto mt-1 mb-6">
-                Create your first client workspace to get started.
-              </p>
-              {!isReadOnly && (
-                isSubscriptionActive ? (
-                  <button onClick={handleNewPortal}
-                    className="bg-zinc-950 hover:bg-zinc-800 text-white text-xs font-bold px-5 py-3 rounded-xl transition cursor-pointer">
-                    Create First Portal
-                  </button>
-                ) : isOwner ? (
-                  <button onClick={() => router.push('/pricing')}
-                    className="bg-zinc-950 hover:bg-zinc-800 text-white text-xs font-bold px-5 py-3 rounded-xl transition cursor-pointer">
-                    View Pricing Plans
-                  </button>
-                ) : null
-              )}
-            </div>
-          ) : (
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {portals.map(p => {
-                const meta = portalMeta[p.id];
-                const hasAction = meta?.hasProposalAction || meta?.messageCount > 0;
-                return (
-                  <div key={p.id} className="bg-white border border-zinc-200/80 rounded-2xl p-5 shadow-2xs flex flex-col justify-between hover:border-zinc-400 transition">
+            ) : (
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {portals.map(p => {
+                  const meta = portalMeta[p.id];
+                  const hasAction = meta?.hasProposalAction || meta?.messageCount > 0;
+                  return (
+                    <div key={p.id} className="bg-white border border-zinc-200/80 rounded-2xl p-5 shadow-2xs flex flex-col justify-between hover:border-zinc-400 transition">
+                      <div>
+                        <div className="flex justify-between items-start mb-3">
+                          <span className="text-[10px] uppercase font-black tracking-wider px-2 py-0.5 bg-emerald-50 text-emerald-700 rounded">Active</span>
+                          <div className="flex items-center gap-2">
+                            {hasAction && (
+                              <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 bg-amber-50 text-amber-600 rounded">
+                                Action needed
+                              </span>
+                            )}
+                            <button onClick={() => router.push(`/dashboard/portal/${p.id}`)}
+                              className="text-zinc-400 hover:text-black transition cursor-pointer" title="Open workspace">
+                              <LayoutGrid className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </div>
+                        <h3 className="text-base font-bold tracking-tight text-zinc-950 truncate">{p.client_name}</h3>
+                        <p className="text-xs font-semibold text-zinc-500 mt-0.5 truncate">{p.project_name}</p>
+                        {meta?.lastMessage && (
+                          <button onClick={() => router.push(`/dashboard/portal/${p.id}`)}
+                            className="mt-3 w-full text-left bg-zinc-50 border border-zinc-100 rounded-xl p-3 hover:bg-zinc-100 transition cursor-pointer">
+                            <div className="flex items-center gap-1.5 mb-1">
+                              <MessageSquare className="w-3 h-3 text-zinc-400" />
+                              <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">
+                                Client message{meta.messageCount > 1 ? ` · ${meta.messageCount}` : ''}
+                              </span>
+                            </div>
+                            <p className="text-xs text-zinc-600 font-medium truncate">{meta.lastMessage}</p>
+                          </button>
+                        )}
+                      </div>
+                      <div className="mt-4 pt-4 border-t border-zinc-100 flex gap-2">
+                        <button onClick={() => copyLink(p.magic_token, p.id)}
+                          className="flex-1 bg-zinc-50 hover:bg-zinc-100 text-zinc-800 border border-zinc-200 text-xs font-bold py-2.5 rounded-xl transition flex items-center justify-center gap-1.5 cursor-pointer">
+                          <Copy className="w-3.5 h-3.5" />
+                          {copiedId === p.id ? 'Copied!' : 'Copy Link'}
+                        </button>
+                        <button onClick={() => window.open(`/portal/${p.magic_token}`, '_blank')}
+                          className="bg-white hover:bg-zinc-50 border border-zinc-200 text-zinc-700 p-2.5 rounded-xl transition cursor-pointer" title="Preview portal">
+                          <ExternalLink className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )
+          )}
+
+          {/* ARCHIVED PORTALS */}
+          {view === 'archived' && (
+            archivedPortals.length === 0 ? (
+              <div className="text-center py-20 border border-dashed border-zinc-300 bg-white rounded-3xl max-w-xl mx-auto">
+                <div className="inline-flex p-3.5 bg-zinc-50 border border-zinc-100 rounded-2xl mb-4">
+                  <Archive className="w-6 h-6 text-zinc-400" />
+                </div>
+                <p className="text-base font-bold text-zinc-900">No archived portals</p>
+                <p className="text-xs text-zinc-500 font-medium mt-1">Completed projects will appear here when archived.</p>
+              </div>
+            ) : (
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {archivedPortals.map(p => (
+                  <div key={p.id} className="bg-white border border-zinc-200/80 rounded-2xl p-5 shadow-2xs flex flex-col justify-between opacity-70 hover:opacity-100 transition">
                     <div>
                       <div className="flex justify-between items-start mb-3">
-                        <span className="text-[10px] uppercase font-black tracking-wider px-2 py-0.5 bg-emerald-50 text-emerald-700 rounded">
-                          Active
-                        </span>
-                        <div className="flex items-center gap-2">
-                          {hasAction && (
-                            <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 bg-amber-50 text-amber-600 rounded">
-                              Action needed
-                            </span>
-                          )}
-                          <button onClick={() => router.push(`/dashboard/portal/${p.id}`)}
-                            className="text-zinc-400 hover:text-black transition cursor-pointer" title="Open workspace">
-                            <LayoutGrid className="w-4 h-4" />
-                          </button>
-                        </div>
+                        <span className="text-[10px] uppercase font-black tracking-wider px-2 py-0.5 bg-zinc-100 text-zinc-500 rounded">Archived</span>
+                        <button onClick={() => router.push(`/dashboard/portal/${p.id}`)}
+                          className="text-zinc-400 hover:text-black transition cursor-pointer" title="Open workspace">
+                          <LayoutGrid className="w-4 h-4" />
+                        </button>
                       </div>
                       <h3 className="text-base font-bold tracking-tight text-zinc-950 truncate">{p.client_name}</h3>
                       <p className="text-xs font-semibold text-zinc-500 mt-0.5 truncate">{p.project_name}</p>
-
-                      {meta?.lastMessage && (
-                        <button onClick={() => router.push(`/dashboard/portal/${p.id}`)}
-                          className="mt-3 w-full text-left bg-zinc-50 border border-zinc-100 rounded-xl p-3 hover:bg-zinc-100 transition cursor-pointer">
-                          <div className="flex items-center gap-1.5 mb-1">
-                            <MessageSquare className="w-3 h-3 text-zinc-400" />
-                            <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">
-                              Client message{meta.messageCount > 1 ? ` · ${meta.messageCount}` : ''}
-                            </span>
-                          </div>
-                          <p className="text-xs text-zinc-600 font-medium truncate">{meta.lastMessage}</p>
-                        </button>
-                      )}
+                      <p className="text-[10px] text-zinc-400 mt-2">
+                        Archived {new Date(p.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                      </p>
                     </div>
-
                     <div className="mt-4 pt-4 border-t border-zinc-100 flex gap-2">
-                      <button onClick={() => copyLink(p.magic_token, p.id)}
+                      <button onClick={() => restorePortal(p.id)}
                         className="flex-1 bg-zinc-50 hover:bg-zinc-100 text-zinc-800 border border-zinc-200 text-xs font-bold py-2.5 rounded-xl transition flex items-center justify-center gap-1.5 cursor-pointer">
-                        <Copy className="w-3.5 h-3.5" />
-                        {copiedId === p.id ? 'Copied!' : 'Copy Link'}
+                        <RotateCcw className="w-3.5 h-3.5" /> Restore
                       </button>
                       <button onClick={() => window.open(`/portal/${p.magic_token}`, '_blank')}
-                        className="bg-white hover:bg-zinc-50 border border-zinc-200 text-zinc-700 p-2.5 rounded-xl transition cursor-pointer" title="Preview portal">
+                        className="bg-white hover:bg-zinc-50 border border-zinc-200 text-zinc-700 p-2.5 rounded-xl transition cursor-pointer" title="View portal">
                         <ExternalLink className="w-3.5 h-3.5" />
                       </button>
                     </div>
                   </div>
-                );
-              })}
-            </div>
+                ))}
+              </div>
+            )
           )}
+
         </div>
       </div>
     </>
