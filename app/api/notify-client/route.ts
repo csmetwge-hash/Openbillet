@@ -15,7 +15,7 @@ export async function POST(req: Request) {
     // Get portal + client email + brand
     const { data: portal } = await supabaseAdmin
       .from('client_portals')
-      .select('client_name, client_email, project_name, magic_token, user_id')
+      .select('client_name, client_email, project_name, magic_token, user_id, brand_name')
       .eq('id', portalId)
       .single();
 
