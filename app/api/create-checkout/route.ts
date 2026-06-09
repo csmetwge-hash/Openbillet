@@ -14,29 +14,26 @@ export async function POST(req: Request) {
         cookies: {
           getAll() { return cookieStore.getAll(); },
           setAll(cookiesToSet) {
-            try {
-              cookiesToSet.forEach(({ name, value, options }) =>
-                cookieStore.set(name, value, options)
-              );
-            } catch {}
+            try { cookiesToSet.forEach(({ name, value, options }) => cookieStore.set(name, value, options)); } catch {}
           },
         },
       }
     );
 
     const { data: { user }, error: authError } = await supabase.auth.getUser();
-
     if (authError || !user) {
       return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 });
     }
 
-    const { priceId } = await req.json();
+    const body = await req.json().catch(() => ({}));
+    // Accept priceId from body or fall back to env var
+    const priceId = body.priceId || process.env.STRIPE_PRICE_ID;
 
     if (!priceId) {
-      return NextResponse.json({ error: 'Missing priceId.' }, { status: 400 });
+      return NextResponse.json({ error: 'Missing price configuration.' }, { status: 400 });
     }
 
-    // Reuse existing Stripe customer to prevent duplicate subscriptions on upgrade
+    // Reuse existing Stripe customer to prevent duplicate subscriptions
     const { data: existingSub } = await supabaseAdmin
       .from('manager_subscriptions')
       .select('stripe_customer_id')
