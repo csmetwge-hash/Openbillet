@@ -29,11 +29,17 @@ function AuthContent() {
         setMessage(error.message);
       }
     } else {
-      const { error } = await supabase.auth.signUp({ email, password });
+      const { data, error } = await supabase.auth.signUp({ email, password });
       if (!error) {
-        setMessage('Check your email to confirm your account.');
-        setEmail('');
-        setPassword('');
+        if (data.session) {
+          // Email confirmation disabled — start trial immediately
+          await fetch('/api/start-trial', { method: 'POST' });
+          router.push('/dashboard');
+        } else {
+          setEmail('');
+          setPassword('');
+          setMessage('Check your email to confirm your account, then sign in.');
+        }
       } else {
         setMessage(error.message);
       }
@@ -51,12 +57,14 @@ function AuthContent() {
             <Sparkles className="w-5 h-5 text-zinc-900" />
           </div>
           <h1 className="text-2xl font-black tracking-tight text-zinc-950">OpenBillet</h1>
-          <p className="text-sm text-zinc-500 font-medium mt-1">Client portal management</p>
+          <p className="text-sm text-zinc-500 font-medium mt-1">
+            {isLogin ? 'Welcome back' : '14-day free trial · No credit card required'}
+          </p>
         </div>
 
         <div className="bg-white border border-zinc-200/80 rounded-3xl p-8 shadow-xs md:p-10">
           <h2 className="text-xl font-bold tracking-tight text-zinc-900 mb-6">
-            {isLogin ? 'Welcome back' : 'Create your account'}
+            {isLogin ? 'Sign in to your account' : 'Start your free trial'}
           </h2>
 
           {message && (
@@ -70,46 +78,37 @@ function AuthContent() {
               <label className="block text-xs font-bold uppercase tracking-wider text-zinc-500 mb-1.5">Email</label>
               <div className="relative">
                 <Mail className="absolute left-4 top-3.5 h-4 w-4 text-zinc-400" />
-                <input
-                  type="email"
-                  required
-                  placeholder="name@company.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="w-full bg-zinc-50/50 border border-zinc-200 rounded-xl pl-11 pr-4 py-3 text-sm focus:outline-none focus:border-black focus:bg-white transition"
-                />
+                <input type="email" required placeholder="name@company.com"
+                  value={email} onChange={e => setEmail(e.target.value)}
+                  className="w-full bg-zinc-50/50 border border-zinc-200 rounded-xl pl-11 pr-4 py-3 text-sm focus:outline-none focus:border-black focus:bg-white transition" />
               </div>
             </div>
             <div>
               <label className="block text-xs font-bold uppercase tracking-wider text-zinc-500 mb-1.5">Password</label>
               <div className="relative">
                 <Lock className="absolute left-4 top-3.5 h-4 w-4 text-zinc-400" />
-                <input
-                  type="password"
-                  required
-                  placeholder="••••••••"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="w-full bg-zinc-50/50 border border-zinc-200 rounded-xl pl-11 pr-4 py-3 text-sm focus:outline-none focus:border-black focus:bg-white transition"
-                />
+                <input type="password" required placeholder="••••••••"
+                  value={password} onChange={e => setPassword(e.target.value)}
+                  className="w-full bg-zinc-50/50 border border-zinc-200 rounded-xl pl-11 pr-4 py-3 text-sm focus:outline-none focus:border-black focus:bg-white transition" />
               </div>
             </div>
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full bg-zinc-950 text-white py-3.5 rounded-xl font-semibold text-sm hover:bg-zinc-800 transition flex items-center justify-center gap-2 group mt-2 cursor-pointer disabled:opacity-50"
-            >
-              {loading ? 'Processing...' : isLogin ? 'Sign In' : 'Create Account'}
+            <button type="submit" disabled={loading}
+              className="w-full bg-zinc-950 text-white py-3.5 rounded-xl font-semibold text-sm hover:bg-zinc-800 transition flex items-center justify-center gap-2 group mt-2 cursor-pointer disabled:opacity-50">
+              {loading ? 'Processing...' : isLogin ? 'Sign In' : 'Start Free Trial'}
               <ArrowRight className="w-4 h-4 text-zinc-400 group-hover:text-white transition-all" />
             </button>
           </form>
 
-          <div className="mt-8 pt-6 border-t border-zinc-100 text-center">
-            <button
-              onClick={() => { setIsLogin(!isLogin); setMessage(''); }}
-              className="text-xs font-medium text-zinc-500 hover:text-black transition cursor-pointer"
-            >
-              {isLogin ? "Don't have an account? Sign up" : 'Already have an account? Sign in'}
+          {!isLogin && (
+            <p className="text-center text-xs text-zinc-400 mt-4">
+              14 days free · No credit card · Cancel anytime
+            </p>
+          )}
+
+          <div className="mt-6 pt-6 border-t border-zinc-100 text-center">
+            <button onClick={() => { setIsLogin(!isLogin); setMessage(''); }}
+              className="text-xs font-medium text-zinc-500 hover:text-black transition cursor-pointer">
+              {isLogin ? "Don't have an account? Start free trial" : 'Already have an account? Sign in'}
             </button>
           </div>
         </div>
@@ -120,7 +119,11 @@ function AuthContent() {
 
 export default function AuthPage() {
   return (
-    <Suspense fallback={<div className="min-h-screen bg-zinc-50 flex items-center justify-center"><div className="h-6 w-6 border-2 border-zinc-400 border-t-black rounded-full animate-spin" /></div>}>
+    <Suspense fallback={
+      <div className="min-h-screen bg-zinc-50 flex items-center justify-center">
+        <div className="h-6 w-6 border-2 border-zinc-400 border-t-black rounded-full animate-spin" />
+      </div>
+    }>
       <AuthContent />
     </Suspense>
   );
