@@ -5,8 +5,8 @@ import { supabase } from '@/lib/supabase';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
   Plus, Copy, ExternalLink, LogOut, CheckCircle2,
-  LayoutGrid, Users, CreditCard, X, Lock, MessageSquare,
-  Settings, ArrowRight,
+  LayoutGrid, Users, CreditCard, Lock, MessageSquare,
+  Settings, ArrowRight, X, Clock,
 } from 'lucide-react';
 import { resolveWorkspaceAccess } from '@/lib/workspace';
 
@@ -17,9 +17,7 @@ interface PortalMeta {
 }
 
 function CreatePortalModal({
-  ownerId,
-  onClose,
-  onCreated,
+  ownerId, onClose, onCreated,
 }: {
   ownerId: string;
   onClose: () => void;
@@ -36,11 +34,9 @@ function CreatePortalModal({
     if (!clientName.trim()) return;
     setCreating(true);
     setError('');
-
     const { data: { user: currentUser } } = await supabase.auth.getUser();
     const magicToken = Array.from(crypto.getRandomValues(new Uint8Array(16)))
       .map(b => b.toString(16).padStart(2, '0')).join('');
-
     const { data, error } = await supabase
       .from('client_portals')
       .insert({
@@ -52,7 +48,6 @@ function CreatePortalModal({
         status: 'active',
       })
       .select().single();
-
     if (error) { setError(error.message); setCreating(false); return; }
     onCreated(data);
   };
@@ -62,9 +57,7 @@ function CreatePortalModal({
       <div className="bg-white rounded-2xl p-6 max-w-md w-full space-y-5 shadow-2xl border border-zinc-200">
         <div className="flex items-center justify-between">
           <h2 className="text-base font-black text-zinc-900">New Client Portal</h2>
-          <button onClick={onClose} className="text-zinc-400 hover:text-zinc-700 transition cursor-pointer">
-            <X className="w-4 h-4" />
-          </button>
+          <button onClick={onClose} className="text-zinc-400 hover:text-zinc-700 transition cursor-pointer"><X className="w-4 h-4" /></button>
         </div>
         {error && <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-xs font-medium text-red-700">{error}</div>}
         <form onSubmit={handleCreate} className="space-y-4">
@@ -111,7 +104,8 @@ function DashboardContent() {
   const [user, setUser] = useState<any>(null);
   const [ownerId, setOwnerId] = useState<string | null>(null);
   const [userRole, setUserRole] = useState<'owner' | 'admin' | 'user' | null>(null);
-  const [isSubscriptionActive, setIsSubscriptionActive] = useState(false);
+  const [subscriptionStatus, setSubscriptionStatus] = useState<string>('none');
+  const [trialEndsAt, setTrialEndsAt] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [showSuccess, setShowSuccess] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -138,6 +132,9 @@ function DashboardContent() {
     setUserRole(role);
     if (!ownerId) { router.push('/auth'); return; }
 
+    // Start trial if no subscription record exists
+    await fetch('/api/start-trial', { method: 'POST' });
+
     await Promise.all([fetchPortals(ownerId), fetchSubscription(ownerId)]);
     setLoading(false);
   };
@@ -147,7 +144,6 @@ function DashboardContent() {
       supabase.from('client_portals').select('*').eq('user_id', ownerIdParam).eq('status', 'active').order('created_at', { ascending: false }),
       supabase.from('client_portals').select('*').eq('user_id', ownerIdParam).eq('status', 'archived').order('created_at', { ascending: false }),
     ]);
-
     const active = activeRes.data || [];
     setPortals(active);
     setArchivedPortals(archivedRes.data || []);
@@ -174,18 +170,30 @@ function DashboardContent() {
   const fetchSubscription = async (ownerIdParam: string) => {
     const { data } = await supabase
       .from('manager_subscriptions')
-      .select('subscription_status')
+      .select('subscription_status, trial_ends_at')
       .eq('user_id', ownerIdParam)
       .maybeSingle();
-    setIsSubscriptionActive(data?.subscription_status === 'active');
+    if (data) {
+      setSubscriptionStatus(data.subscription_status);
+      setTrialEndsAt(data.trial_ends_at);
+    }
   };
 
   const isReadOnly = userRole === 'user';
   const isOwner = userRole === 'owner';
+  const isActive = subscriptionStatus === 'active';
+  const isTrial = subscriptionStatus === 'trial';
+  const canUse = isActive || isTrial;
+
+  // Calculate trial days remaining
+  const trialDaysLeft = trialEndsAt
+    ? Math.max(0, Math.ceil((new Date(trialEndsAt).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
+    : 0;
+  const trialExpired = isTrial && trialDaysLeft === 0;
 
   const handleNewPortal = () => {
     if (isReadOnly) return;
-    if (!isSubscriptionActive) { router.push('/pricing'); return; }
+    if (!canUse || trialExpired) { router.push('/pricing'); return; }
     setShowCreateModal(true);
   };
 
@@ -244,7 +252,35 @@ function DashboardContent() {
             </div>
           )}
 
-          {isOwner && !isSubscriptionActive && (
+          {/* Trial banner */}
+          {isTrial && !trialExpired && isOwner && (
+            <div className="bg-zinc-900 border border-zinc-700 text-zinc-100 p-4 rounded-2xl flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5">
+                <Clock className="w-4 h-4 text-amber-400 shrink-0" />
+                <div className="text-sm font-semibold">
+                  Free trial — <span className="text-amber-400">{trialDaysLeft} day{trialDaysLeft !== 1 ? 's' : ''} remaining</span>
+                </div>
+              </div>
+              <button onClick={() => router.push('/pricing')}
+                className="text-xs font-bold uppercase tracking-wider bg-white text-zinc-900 px-4 py-2 rounded-xl hover:bg-zinc-200 transition cursor-pointer whitespace-nowrap">
+                Subscribe
+              </button>
+            </div>
+          )}
+
+          {/* Trial expired */}
+          {trialExpired && isOwner && (
+            <div className="bg-red-50 border border-red-200 text-red-900 p-4 rounded-2xl flex items-center justify-between gap-3">
+              <div className="text-sm font-semibold">Your free trial has ended. Subscribe to continue using OpenBillet.</div>
+              <button onClick={() => router.push('/pricing')}
+                className="text-xs font-bold uppercase tracking-wider bg-red-900 text-white px-4 py-2 rounded-xl hover:bg-red-800 transition cursor-pointer whitespace-nowrap">
+                Subscribe Now
+              </button>
+            </div>
+          )}
+
+          {/* No subscription at all */}
+          {subscriptionStatus === 'none' && isOwner && (
             <div className="bg-amber-50 border border-amber-200 text-amber-900 p-4 rounded-2xl flex items-center justify-between gap-3">
               <div className="text-sm font-semibold">No active plan. Subscribe to start creating client portals.</div>
               <button onClick={() => router.push('/pricing')}
@@ -266,6 +302,8 @@ function DashboardContent() {
               <h1 className="text-2xl font-black tracking-tight text-zinc-950">Workspace Console</h1>
               <p className="text-sm font-medium text-zinc-500 mt-0.5">
                 {user?.email}
+                {isActive && <span className="ml-2 text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded bg-zinc-900 text-white">Pro</span>}
+                {isTrial && !trialExpired && <span className="ml-2 text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded bg-amber-100 text-amber-700">Trial</span>}
                 {!isOwner && (
                   <span className="ml-2 text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded bg-zinc-100 text-zinc-600">
                     {userRole === 'admin' ? 'Admin' : 'Viewer'}
@@ -304,7 +342,7 @@ function DashboardContent() {
               Active {portals.length > 0 && <span className="ml-1 opacity-60">({portals.length})</span>}
             </button>
             <button onClick={() => setView('archived')}
-              className={`text-xs font-bold px-4 py-2 rounded-xl transition cursor-pointer flex items-center gap-1.5 ${view === 'archived' ? 'bg-zinc-950 text-white' : 'bg-white border border-zinc-200 text-zinc-500 hover:text-zinc-800'}`}>
+              className={`text-xs font-bold px-4 py-2 rounded-xl transition cursor-pointer ${view === 'archived' ? 'bg-zinc-950 text-white' : 'bg-white border border-zinc-200 text-zinc-500 hover:text-zinc-800'}`}>
               Archived {archivedPortals.length > 0 && <span className="ml-0.5 opacity-60">({archivedPortals.length})</span>}
             </button>
           </div>
@@ -318,18 +356,17 @@ function DashboardContent() {
                 </div>
                 <p className="text-base font-bold text-zinc-900">No portals yet</p>
                 <p className="text-xs text-zinc-500 font-medium max-w-xs mx-auto mt-1 mb-6">Create your first client workspace to get started.</p>
-                {!isReadOnly && (
-                  isSubscriptionActive ? (
-                    <button onClick={handleNewPortal}
-                      className="bg-zinc-950 hover:bg-zinc-800 text-white text-xs font-bold px-5 py-3 rounded-xl transition cursor-pointer">
-                      Create First Portal
-                    </button>
-                  ) : isOwner ? (
-                    <button onClick={() => router.push('/pricing')}
-                      className="bg-zinc-950 hover:bg-zinc-800 text-white text-xs font-bold px-5 py-3 rounded-xl transition cursor-pointer">
-                      View Pricing
-                    </button>
-                  ) : null
+                {!isReadOnly && canUse && !trialExpired && (
+                  <button onClick={handleNewPortal}
+                    className="bg-zinc-950 hover:bg-zinc-800 text-white text-xs font-bold px-5 py-3 rounded-xl transition cursor-pointer">
+                    Create First Portal
+                  </button>
+                )}
+                {(!canUse || trialExpired) && isOwner && (
+                  <button onClick={() => router.push('/pricing')}
+                    className="bg-zinc-950 hover:bg-zinc-800 text-white text-xs font-bold px-5 py-3 rounded-xl transition cursor-pointer">
+                    View Pricing
+                  </button>
                 )}
               </div>
             ) : (
