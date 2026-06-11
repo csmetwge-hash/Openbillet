@@ -11,6 +11,7 @@ import {
 
 export default function LandingPage() {
   const [activeFaq, setActiveFaq] = useState<number | null>(null);
+  const [billing, setBilling] = useState<'monthly' | 'annual'>('monthly');
   const router = useRouter();
 
   const features = [
@@ -140,7 +141,7 @@ export default function LandingPage() {
         </p>
 
         <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
-          <button onClick={() => router.push('/auth')}
+          <button onClick={() => router.push('/auth?mode=signup')}
             className="w-full sm:w-auto flex items-center justify-center gap-2 bg-white text-black text-sm font-bold px-8 py-4 rounded-xl hover:bg-zinc-200 transition cursor-pointer">
             Start Free Trial
             <ArrowRight className="w-4 h-4 stroke-[2.5]" />
@@ -274,17 +275,46 @@ export default function LandingPage() {
         <div className="text-center space-y-3 mb-12">
           <p className="text-[10px] font-bold tracking-widest uppercase text-zinc-500">Pricing</p>
           <h2 className="text-2xl sm:text-3xl font-black text-white tracking-tight">One plan. Everything included.</h2>
-          <p className="text-sm text-zinc-400 max-w-sm mx-auto">No tiers. No feature limits. No surprises. Everything OpenBillet offers, from day one.</p>
+          <p className="text-sm text-zinc-400 max-w-sm mx-auto">No tiers. No feature limits. No surprises.</p>
+
+          {/* Billing toggle */}
+          <div className="inline-flex items-center bg-zinc-900 border border-zinc-800 p-1 rounded-xl mt-2">
+            <button onClick={() => setBilling('monthly')}
+              className={`text-[10px] font-bold uppercase tracking-wider px-5 py-2 rounded-lg transition cursor-pointer ${billing === 'monthly' ? 'bg-zinc-800 text-white border border-zinc-700' : 'text-zinc-500 hover:text-zinc-300'}`}>
+              Monthly
+            </button>
+            <button onClick={() => setBilling('annual')}
+              className={`text-[10px] font-bold uppercase tracking-wider px-5 py-2 rounded-lg transition cursor-pointer ${billing === 'annual' ? 'bg-zinc-800 text-white border border-zinc-700' : 'text-zinc-500 hover:text-zinc-300'}`}>
+              Annual <span className="text-emerald-400 font-mono text-[9px] normal-case ml-1">2 months free</span>
+            </button>
+          </div>
         </div>
 
         <div className="bg-zinc-900/50 border border-zinc-700 rounded-3xl p-8 md:p-10 shadow-2xl shadow-zinc-950/50 max-w-md mx-auto">
-          <div className="flex items-baseline gap-2 mb-2">
-            <span className="text-5xl font-black text-white">$74</span>
-            <span className="text-sm text-zinc-500 font-medium">/ month</span>
-          </div>
-          <p className="text-xs text-zinc-500 mb-8">Unlimited portals · Unlimited clients · Cancel anytime</p>
+          {billing === 'monthly' ? (
+            <div className="mb-2">
+              <div className="flex items-baseline gap-2">
+                <span className="text-5xl font-black text-white">$74</span>
+                <span className="text-sm text-zinc-500 font-medium">/ month</span>
+              </div>
+              <p className="text-xs text-zinc-500 mt-1">Unlimited everything · Cancel anytime</p>
+            </div>
+          ) : (
+            <div className="mb-2">
+              <div className="flex items-baseline gap-2">
+                <span className="text-5xl font-black text-white">$740</span>
+                <span className="text-sm text-zinc-500 font-medium">/ year</span>
+              </div>
+              <div className="flex items-center gap-2 mt-1">
+                <span className="text-sm text-emerald-400 font-bold">$62/month effective</span>
+                <span className="text-xs text-zinc-600 line-through">$888/yr</span>
+                <span className="text-[10px] font-black text-emerald-500 bg-emerald-950/50 border border-emerald-900 px-2 py-0.5 rounded-full">Save $148</span>
+              </div>
+              <p className="text-xs text-zinc-500 mt-1">Billed annually · Cancel anytime</p>
+            </div>
+          )}
 
-          <ul className="space-y-3 mb-8">
+          <ul className="space-y-3 mb-8 mt-6">
             {[
               'Unlimited client portals',
               'Magic link client access — no login required',
@@ -307,12 +337,12 @@ export default function LandingPage() {
             ))}
           </ul>
 
-          <button onClick={() => router.push('/auth')}
+          <button onClick={() => router.push('/auth?mode=signup')}
             className="w-full bg-white text-black py-4 rounded-xl font-bold text-sm hover:bg-zinc-200 transition cursor-pointer flex items-center justify-center gap-2">
             Start Free Trial
             <ArrowRight className="w-4 h-4" />
           </button>
-          <p className="text-center text-xs text-zinc-600 mt-3">No credit card required to start</p>
+          <p className="text-center text-xs text-zinc-600 mt-3">14 days free · No credit card required</p>
         </div>
       </section>
 
@@ -373,7 +403,7 @@ export default function LandingPage() {
           <p className="text-sm text-zinc-400 max-w-lg mx-auto leading-relaxed">
             Set up your first client portal in under 5 minutes. No training required. No complicated setup. Just a clean, professional workspace your clients will actually use.
           </p>
-          <button onClick={() => router.push('/auth')}
+          <button onClick={() => router.push('/auth?mode=signup')}
             className="inline-flex items-center gap-2 bg-white text-black text-sm font-bold px-8 py-4 rounded-xl hover:bg-zinc-200 transition cursor-pointer">
             Get Started Free
             <ArrowRight className="w-4 h-4 stroke-[2.5]" />
