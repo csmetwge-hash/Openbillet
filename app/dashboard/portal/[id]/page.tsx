@@ -39,7 +39,7 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
   const [activeTab, setActiveTab] = useState<Tab>('milestones');
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState(false);
-  const [userRole, setUserRole] = useState<'owner' | 'admin' | 'user' | null>(null);
+  const [userRole, setUserRole] = useState<'owner' | 'admin' | 'user' | 'worker' | null>(null);
   const [archiving, setArchiving] = useState(false);
 
   const pageTopRef = useRef<HTMLDivElement>(null);
@@ -100,6 +100,7 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
 
   const fetchAll = async () => {
     const { ownerId, role } = await resolveWorkspaceAccess();
+    if (role === 'worker') { router.push('/worker'); return; }
     if (!ownerId) { router.push('/auth'); return; }
     setUserRole(role);
 
