@@ -122,7 +122,7 @@ export default function AdminWorkspaceManager() {
         setPortals(data);
         fetchScheduledJobs(data.map((p: Portal) => p.id));
       }
-
+      console.log('fetchWorkers called with:', user.id);
       fetchWorkers(user.id);
     } catch (err) {
       console.error('Operational matrix hydration failed:', err);
