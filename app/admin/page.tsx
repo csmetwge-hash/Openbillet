@@ -138,6 +138,7 @@ export default function AdminWorkspaceManager() {
       .eq('owner_user_id', ownerId)
       .eq('role', 'worker')
       .eq('status', 'active');
+    console.log('fetchWorkers result:', data, error);
     setWorkers(data || []);
   };
 
