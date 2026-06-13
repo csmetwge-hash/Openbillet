@@ -118,6 +118,13 @@ export default function SettingsPage() {
     setTeamMembers(prev => prev.filter(m => m.id !== id));
   };
 
+  const updateMemberRole = async (id: string, newRole: string) => {
+    const { error } = await supabase.from('team_members').update({ role: newRole }).eq('id', id);
+    if (!error) {
+      setTeamMembers(prev => prev.map(m => m.id === id ? { ...m, role: newRole } : m));
+    }
+  };
+
   const getRoleIcon = (role: string) => {
     if (role === 'admin') return <Shield className="w-3.5 h-3.5 text-zinc-500" />;
     if (role === 'worker') return <Wrench className="w-3.5 h-3.5 text-zinc-500" />;
@@ -303,8 +310,16 @@ export default function SettingsPage() {
                   </div>
                   <div className="min-w-0">
                     <p className="text-xs font-semibold text-zinc-900 truncate">{member.member_email}</p>
-                    <div className="flex items-center gap-2">
-                      <span className="text-[10px] text-zinc-400 capitalize">{member.role}</span>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <select
+                        value={member.role}
+                        onChange={(e) => updateMemberRole(member.id, e.target.value)}
+                        className="text-[10px] border border-zinc-200 rounded px-1.5 py-0.5 bg-white text-zinc-600 focus:outline-none cursor-pointer"
+                      >
+                        <option value="user">Viewer</option>
+                        <option value="admin">Admin</option>
+                        <option value="worker">Field Worker</option>
+                      </select>
                       <span className={`text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded ${
                         member.status === 'active' ? 'bg-emerald-50 text-emerald-600' : 'bg-amber-50 text-amber-600'
                       }`}>
