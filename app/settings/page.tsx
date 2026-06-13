@@ -5,7 +5,7 @@ import { supabase } from '@/lib/supabase';
 import { useRouter } from 'next/navigation';
 import {
   ArrowLeft, Upload, Save, UserPlus, Trash2, Mail,
-  CheckCircle2, AlertCircle, Crown, Shield, Eye,
+  CheckCircle2, AlertCircle, Crown, Shield, Eye, Wrench,
 } from 'lucide-react';
 
 export default function SettingsPage() {
@@ -24,7 +24,7 @@ export default function SettingsPage() {
   // Team
   const [teamMembers, setTeamMembers] = useState<any[]>([]);
   const [inviteEmail, setInviteEmail] = useState('');
-  const [inviteRole, setInviteRole] = useState<'admin' | 'user'>('user');
+  const [inviteRole, setInviteRole] = useState<'admin' | 'user' | 'worker'>('user');
   const [inviting, setInviting] = useState(false);
   const [inviteMsg, setInviteMsg] = useState('');
   const [inviteError, setInviteError] = useState('');
@@ -120,6 +120,7 @@ export default function SettingsPage() {
 
   const getRoleIcon = (role: string) => {
     if (role === 'admin') return <Shield className="w-3.5 h-3.5 text-zinc-500" />;
+    if (role === 'worker') return <Wrench className="w-3.5 h-3.5 text-zinc-500" />;
     return <Eye className="w-3.5 h-3.5 text-zinc-400" />;
   };
 
@@ -230,10 +231,11 @@ export default function SettingsPage() {
               <input type="email" required value={inviteEmail} onChange={e => setInviteEmail(e.target.value)}
                 placeholder="colleague@company.com"
                 className="flex-1 border border-zinc-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-zinc-900 transition" />
-              <select value={inviteRole} onChange={e => setInviteRole(e.target.value as 'admin' | 'user')}
+              <select value={inviteRole} onChange={e => setInviteRole(e.target.value as 'admin' | 'user' | 'worker')}
                 className="border border-zinc-200 rounded-xl px-3 py-3 text-sm bg-white font-medium text-zinc-700 focus:outline-none shrink-0">
                 <option value="user">Viewer</option>
                 <option value="admin">Admin</option>
+                <option value="worker">Field Worker</option>
               </select>
             </div>
             <button type="submit" disabled={inviting || !inviteEmail.trim()}
@@ -254,7 +256,7 @@ export default function SettingsPage() {
           </form>
 
           {/* Role legend */}
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-3 gap-2">
             <div className="bg-zinc-50 rounded-xl p-3 space-y-1">
               <div className="flex items-center gap-1.5">
                 <Shield className="w-3.5 h-3.5 text-zinc-600" />
@@ -268,6 +270,13 @@ export default function SettingsPage() {
                 <span className="text-xs font-bold text-zinc-700">Viewer</span>
               </div>
               <p className="text-[10px] text-zinc-500">Read-only access, cannot make changes</p>
+            </div>
+            <div className="bg-zinc-50 rounded-xl p-3 space-y-1">
+              <div className="flex items-center gap-1.5">
+                <Wrench className="w-3.5 h-3.5 text-zinc-500" />
+                <span className="text-xs font-bold text-zinc-700">Field Worker</span>
+              </div>
+              <p className="text-[10px] text-zinc-500">Sees only their assigned jobs &amp; schedule</p>
             </div>
           </div>
 
