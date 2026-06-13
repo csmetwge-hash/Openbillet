@@ -9,7 +9,7 @@ import { supabase } from '@/lib/supabase';
 export async function resolveWorkspaceAccess(): Promise<{
   ownerId: string | null;
   currentUserId: string | null;
-  role: 'owner' | 'admin' | 'user' | null;
+  role: 'owner' | 'admin' | 'user' | 'worker' | null;
 }> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { ownerId: null, currentUserId: null, role: null };
@@ -26,7 +26,7 @@ export async function resolveWorkspaceAccess(): Promise<{
     return {
       ownerId: membership.owner_user_id,
       currentUserId: user.id,
-      role: membership.role as 'admin' | 'user',
+      role: membership.role as 'admin' | 'user' | 'worker',
     };
   }
 
