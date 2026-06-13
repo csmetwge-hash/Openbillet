@@ -34,7 +34,6 @@ function AcceptInviteContent() {
 
   const acceptInvite = async () => {
     setStatus('accepting');
-    console.log('Accepting invite with:', { inviteId, email });
     try {
       const res = await fetch('/api/accept-invite', {
         method: 'POST',
@@ -44,7 +43,8 @@ function AcceptInviteContent() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
       setStatus('success');
-      setTimeout(() => router.push('/dashboard'), 2000);
+      const destination = data.role === 'worker' ? '/worker' : '/dashboard';
+      setTimeout(() => router.push(destination), 2000);
     } catch (err: any) {
       setErrorMsg(err.message);
       setStatus('error');
