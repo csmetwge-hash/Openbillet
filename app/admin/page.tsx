@@ -19,7 +19,10 @@ import {
   Archive,
   RotateCcw,
   Clock,
-  DollarSign
+  DollarSign,
+  Calendar,
+  User,
+  AlertTriangle
 } from 'lucide-react';
 
 interface Portal {
@@ -38,6 +41,10 @@ interface Milestone {
   status: 'incomplete' | 'completed';
   payment_request?: string;
   reminder_days?: number;
+  scheduled_at?: string | null;
+  assigned_worker_id?: string | null;
+  worker_status?: string | null;
+  worker_note?: string | null;
 }
 
 interface PortalFile {
@@ -83,6 +90,14 @@ export default function AdminWorkspaceManager() {
   const [newNote, setNewNote] = useState('');
   const [uploadingFile, setUploadingFile] = useState(false);
 
+  // Scheduling / worker assignment
+  const [milestoneScheduledAt, setMilestoneScheduledAt] = useState('');
+  const [milestoneAssignedWorker, setMilestoneAssignedWorker] = useState('');
+  const [workers, setWorkers] = useState<{ id: string; member_email: string }[]>([]);
+  const [scheduledJobs, setScheduledJobs] = useState<any[]>([]);
+  const [reschedulingId, setReschedulingId] = useState<string | null>(null);
+  const [rescheduleDate, setRescheduleDate] = useState('');
+
   // Manager Soft Deadline Dropdown Value Matrix
   const deadlineOptions = [1, 3, 5, 7, 10, 14, 21, 30, 45, 60];
 
@@ -103,11 +118,58 @@ export default function AdminWorkspaceManager() {
         .eq('user_id', user.id)
         .order('created_at', { ascending: false });
         
-      if (!error && data) setPortals(data);
+      if (!error && data) {
+        setPortals(data);
+        fetchScheduledJobs(data.map((p: Portal) => p.id));
+      }
+
+      fetchWorkers(user.id);
     } catch (err) {
       console.error('Operational matrix hydration failed:', err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchWorkers = async (ownerId: string) => {
+    const { data } = await supabase
+      .from('team_members')
+      .select('id, member_email')
+      .eq('owner_user_id', ownerId)
+      .eq('role', 'worker')
+      .eq('status', 'active');
+    setWorkers(data || []);
+  };
+
+  const fetchScheduledJobs = async (portalIds: string[]) => {
+    if (portalIds.length === 0) { setScheduledJobs([]); return; }
+    const { data } = await supabase
+      .from('portal_milestones')
+      .select('id, title, scheduled_at, worker_status, worker_note, portal_id, assigned_worker_id, client_portals(client_name, project_name), team_members(member_email)')
+      .in('portal_id', portalIds)
+      .not('scheduled_at', 'is', null)
+      .order('scheduled_at', { ascending: true });
+    setScheduledJobs(data || []);
+  };
+
+  const handleReschedule = async (milestoneId: string) => {
+    if (!rescheduleDate) return;
+    try {
+      const { error } = await supabase
+        .from('portal_milestones')
+        .update({
+          scheduled_at: new Date(rescheduleDate).toISOString(),
+          worker_status: null,
+          worker_note: null,
+        })
+        .eq('id', milestoneId);
+      if (error) throw error;
+      setReschedulingId(null);
+      setRescheduleDate('');
+      fetchScheduledJobs(portals.map(p => p.id));
+      if (activePortalId) loadPortalSubData(activePortalId);
+    } catch (err) {
+      alert('Failed to reschedule job.');
     }
   };
 
@@ -162,15 +224,6 @@ export default function AdminWorkspaceManager() {
       if (subErr || !subRecord || subRecord.subscription_status !== 'active') {
         alert("Subscription status inactive. Please link a valid payment plan to initialize project pipelines.");
         window.location.href = '/billing';
-        return;
-      }
-
-      // Track running active pipelines
-      const activePortalsCount = portals.filter(p => p.status === 'active').length;
-
-      // Enforcement Gate: Cap Starter tier accounts at 3 active pipelines
-      if (subRecord.tier_level === 'starter' && activePortalsCount >= 3) {
-        alert("Starter tier allocation limits reached (Max 3 active pipelines). Please archive an old project or upgrade to Pro Unlimited.");
         return;
       }
 
@@ -242,7 +295,9 @@ export default function AdminWorkspaceManager() {
           status: 'incomplete',
           payment_request: milestonePaymentText.trim() || null,
           reminder_days: milestoneReminderDays ? parseInt(milestoneReminderDays) : null,
-          deadline_escalation_at: escalationDate
+          deadline_escalation_at: escalationDate,
+          scheduled_at: milestoneScheduledAt ? new Date(milestoneScheduledAt).toISOString() : null,
+          assigned_worker_id: milestoneAssignedWorker || null,
         }]);
 
       if (error) throw error;
@@ -250,7 +305,10 @@ export default function AdminWorkspaceManager() {
       setMilestoneTitle('');
       setMilestonePaymentText('');
       setMilestoneReminderDays('');
+      setMilestoneScheduledAt('');
+      setMilestoneAssignedWorker('');
       loadPortalSubData(portal.id);
+      fetchScheduledJobs(portals.map(p => p.id));
     } catch (err) {
       console.error(err);
     }
@@ -461,6 +519,45 @@ export default function AdminWorkspaceManager() {
 
         {/* Right Columns: Pipelines Filter Toggles + Project Cards */}
         <div className="lg:col-span-2 space-y-4">
+
+          {/* Scheduled Jobs Agenda */}
+          {scheduledJobs.length > 0 && (
+            <div className="bg-zinc-900/50 backdrop-blur-sm border border-zinc-800 rounded-2xl p-6">
+              <div className="flex items-center gap-2 mb-4">
+                <Calendar className="w-4 h-4 text-zinc-300" />
+                <h2 className="text-xs font-bold uppercase tracking-wider text-zinc-200">Scheduled Jobs</h2>
+              </div>
+              <div className="space-y-2">
+                {scheduledJobs.map((job: any) => {
+                  const portalInfo = Array.isArray(job.client_portals) ? job.client_portals[0] : job.client_portals;
+                  const workerInfo = Array.isArray(job.team_members) ? job.team_members[0] : job.team_members;
+                  const flagged = job.worker_status === 'no_show' || job.worker_status === 'issue_reported';
+                  return (
+                    <div key={job.id} className={`flex items-center justify-between gap-3 p-2.5 rounded-lg border text-xs ${flagged ? 'border-amber-700/50 bg-amber-950/20' : 'border-zinc-800 bg-zinc-800/40'}`}>
+                      <div className="min-w-0">
+                        <p className="font-medium text-zinc-200 truncate">{job.title}</p>
+                        <p className="text-[10px] text-zinc-500 truncate">{portalInfo?.client_name} — {portalInfo?.project_name}</p>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <p className="text-[10px] font-mono text-zinc-300">
+                          {new Date(job.scheduled_at).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
+                        </p>
+                        {workerInfo?.member_email && (
+                          <p className="text-[9px] text-zinc-500">{workerInfo.member_email}</p>
+                        )}
+                        {flagged && (
+                          <p className="text-[9px] font-bold uppercase text-amber-400 flex items-center gap-1 justify-end mt-0.5">
+                            <AlertTriangle className="w-2.5 h-2.5" /> {job.worker_status === 'no_show' ? 'No-show' : 'Reschedule'}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           <div className="bg-zinc-900/50 backdrop-blur-sm border border-zinc-800 rounded-2xl p-6 md:p-8">
             
             {/* ACTIVE vs COMPLETED FILTER TAB ROW */}
@@ -578,6 +675,42 @@ export default function AdminWorkspaceManager() {
                                         <Clock className="w-2.5 h-2.5" /> Reminder set: {m.reminder_days} days
                                       </div>
                                     )}
+                                    {m.scheduled_at && (
+                                      <div className="text-[9px] font-mono text-zinc-400 flex items-center gap-1 flex-wrap">
+                                        <Calendar className="w-2.5 h-2.5" />
+                                        {new Date(m.scheduled_at).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
+                                        {m.assigned_worker_id && (
+                                          <span className="flex items-center gap-1 ml-1">
+                                            <User className="w-2.5 h-2.5" />
+                                            {workers.find(w => w.id === m.assigned_worker_id)?.member_email || 'Assigned'}
+                                          </span>
+                                        )}
+                                      </div>
+                                    )}
+                                    {(m.worker_status === 'no_show' || m.worker_status === 'issue_reported') && (
+                                      <div className="text-[9px] font-medium text-amber-300 bg-amber-500/10 border border-amber-500/20 px-1.5 py-1 rounded space-y-1">
+                                        <div className="flex items-center gap-1">
+                                          <AlertTriangle className="w-2.5 h-2.5" />
+                                          {m.worker_status === 'no_show' ? 'Worker reported NO-SHOW' : 'Worker requested RESCHEDULE'}
+                                          {m.worker_note ? `: ${m.worker_note}` : ''}
+                                        </div>
+                                        {reschedulingId === m.id ? (
+                                          <div className="flex gap-1 pt-1">
+                                            <input
+                                              type="datetime-local"
+                                              value={rescheduleDate}
+                                              onChange={(e) => setRescheduleDate(e.target.value)}
+                                              className="flex-1 bg-zinc-900 border border-zinc-700 rounded px-1.5 py-1 text-[9px] text-white [color-scheme:dark]"
+                                            />
+                                            <button onClick={() => handleReschedule(m.id)} className="bg-white text-zinc-900 px-2 rounded text-[9px] font-bold uppercase">Set</button>
+                                          </div>
+                                        ) : (
+                                          <button onClick={() => setReschedulingId(m.id)} className="text-[9px] font-bold uppercase underline">
+                                            Set new time
+                                          </button>
+                                        )}
+                                      </div>
+                                    )}
                                   </div>
                                 ))
                               )}
@@ -616,6 +749,22 @@ export default function AdminWorkspaceManager() {
                                 >
                                   <option value="">No Reminder Loop</option>
                                   {deadlineOptions.map(d => <option key={d} value={d}>{d} Day Reminder</option>)}
+                                </select>
+                              </div>
+                              <div className="grid grid-cols-2 gap-2">
+                                <input
+                                  type="datetime-local"
+                                  value={milestoneScheduledAt}
+                                  onChange={(e) => setMilestoneScheduledAt(e.target.value)}
+                                  className="bg-zinc-800 border border-zinc-700 text-[10px] rounded-lg px-2 py-1.5 text-zinc-200 focus:outline-none [color-scheme:dark]"
+                                />
+                                <select
+                                  value={milestoneAssignedWorker}
+                                  onChange={(e) => setMilestoneAssignedWorker(e.target.value)}
+                                  className="bg-zinc-800 border border-zinc-700 text-[10px] rounded-lg px-2 py-1.5 text-zinc-200 focus:outline-none"
+                                >
+                                  <option value="">Myself / Unassigned</option>
+                                  {workers.map(w => <option key={w.id} value={w.id}>{w.member_email}</option>)}
                                 </select>
                               </div>
                               <button type="submit" className="w-full bg-zinc-700 hover:bg-zinc-600 px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider text-white transition">
