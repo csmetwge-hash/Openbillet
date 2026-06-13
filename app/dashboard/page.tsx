@@ -103,7 +103,7 @@ function DashboardContent() {
   const [portalMeta, setPortalMeta] = useState<Record<string, PortalMeta>>({});
   const [user, setUser] = useState<any>(null);
   const [ownerId, setOwnerId] = useState<string | null>(null);
-  const [userRole, setUserRole] = useState<'owner' | 'admin' | 'user' | null>(null);
+  const [userRole, setUserRole] = useState<'owner' | 'admin' | 'user' | 'worker' | null>(null);
   const [subscriptionStatus, setSubscriptionStatus] = useState<string>('none');
   const [trialEndsAt, setTrialEndsAt] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -128,6 +128,7 @@ function DashboardContent() {
     }
 
     const { ownerId, role } = await resolveWorkspaceAccess();
+    if (role === 'worker') { router.push('/worker'); return; }
     setOwnerId(ownerId);
     setUserRole(role);
     if (!ownerId) { router.push('/auth'); return; }
