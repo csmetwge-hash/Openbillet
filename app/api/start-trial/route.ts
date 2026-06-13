@@ -52,7 +52,14 @@ export async function POST() {
         updated_at: new Date().toISOString(),
       });
 
-    if (error) throw error;
+    if (error) {
+      // Race condition: another concurrent call already created this record.
+      // That's fine — the trial record exists either way.
+      if (error.code === '23505') {
+        return NextResponse.json({ success: true, alreadyExists: true });
+      }
+      throw error;
+    }
 
     return NextResponse.json({ success: true, trialEnds: trialEnds.toISOString() });
 
