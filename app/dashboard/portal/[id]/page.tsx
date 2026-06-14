@@ -57,6 +57,11 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
   // Workers
   const [workers, setWorkers] = useState<{ id: string; member_email: string }[]>([]);
 
+  // Reschedule
+  const [reschedulingId, setReschedulingId] = useState<string | null>(null);
+  const [rescheduleDate, setRescheduleDate] = useState('');
+  const [reschedulingSaving, setReschedulingSaving] = useState(false);
+
   // Templates
   const [templates, setTemplates] = useState<any[]>([]);
   const [showTemplateMenu, setShowTemplateMenu] = useState(false);
@@ -114,7 +119,7 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
     const { data: portalData, error } = await supabase
       .from('client_portals').select('*').eq('id', portalId).eq('user_id', ownerId).single();
 
-    if (error || !portalData) { router.push('/dashboard'); return; }
+    if (error || !portalData) { router.push('/admin'); return; }
     setPortal(portalData);
     setCrmFields({
       client_phone: portalData.client_phone || '',
@@ -201,7 +206,7 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
     });
     if (res.ok) {
       if (action === 'archive') {
-        router.push('/dashboard');
+        router.push('/admin');
       } else {
         setPortal((prev: any) => ({ ...prev, status: 'active' }));
       }
@@ -276,6 +281,46 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
     if (!confirm('Delete this milestone?')) return;
     await supabase.from('portal_milestones').delete().eq('id', id);
     setMilestones(prev => prev.filter(m => m.id !== id));
+  };
+
+  const handleReschedule = async (milestone: any) => {
+    if (!rescheduleDate || isReadOnly) return;
+    setReschedulingSaving(true);
+    const newScheduledAt = new Date(rescheduleDate).toISOString();
+
+    await supabase.from('portal_milestones').update({
+      scheduled_at: newScheduledAt,
+      worker_status: null,
+      worker_note: null,
+    }).eq('id', milestone.id);
+
+    setMilestones(prev => prev.map(m => m.id === milestone.id
+      ? { ...m, scheduled_at: newScheduledAt, worker_status: null, worker_note: null }
+      : m
+    ));
+
+    const worker = workers.find(w => w.id === milestone.assigned_worker_id);
+    if (worker?.member_email) {
+      try {
+        await fetch('/api/notify-worker', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            workerEmail: worker.member_email,
+            jobTitle: milestone.title,
+            scheduledAt: newScheduledAt,
+            clientName: portal?.client_name,
+            projectName: portal?.project_name,
+          }),
+        });
+      } catch (err) { console.error('Worker notify failed:', err); }
+    }
+
+    await logActivity('milestone_rescheduled', `Rescheduled "${milestone.title}" to ${new Date(newScheduledAt).toLocaleString()}`);
+
+    setReschedulingId(null);
+    setRescheduleDate('');
+    setReschedulingSaving(false);
   };
 
   // ── Photo upload ─────────────────────────────────────────
@@ -524,7 +569,7 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
       <div className="bg-white border-b border-zinc-200 sticky top-0 z-40">
         <div className="max-w-4xl mx-auto px-4 py-4 flex items-center justify-between gap-3">
           <div className="flex items-center gap-3 min-w-0">
-            <button onClick={() => router.push('/dashboard')} className="p-2 bg-zinc-100 rounded-xl hover:bg-zinc-200 transition cursor-pointer shrink-0">
+            <button onClick={() => router.push('/admin')} className="p-2 bg-zinc-100 rounded-xl hover:bg-zinc-200 transition cursor-pointer shrink-0">
               <ArrowLeft className="w-4 h-4 text-zinc-600" />
             </button>
             <div className="min-w-0">
@@ -760,10 +805,33 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
                         )}
                       </div>
                       {(m.worker_status === 'no_show' || m.worker_status === 'issue_reported') && (
-                        <div className="mt-2 text-[11px] font-medium text-amber-700 bg-amber-50 border border-amber-200 px-2.5 py-1.5 rounded-lg flex items-start gap-1.5">
-                          <AlertTriangle className="w-3 h-3 mt-0.5 shrink-0" />
-                          {m.worker_status === 'no_show' ? 'Worker reported a no-show' : 'Worker requested a reschedule'}
-                          {m.worker_note ? ` — ${m.worker_note}` : ''}
+                        <div className="mt-2 text-[11px] font-medium text-amber-700 bg-amber-50 border border-amber-200 px-2.5 py-1.5 rounded-lg space-y-2">
+                          <div className="flex items-start gap-1.5">
+                            <AlertTriangle className="w-3 h-3 mt-0.5 shrink-0" />
+                            {m.worker_status === 'no_show' ? 'Worker reported a no-show' : 'Worker requested a reschedule'}
+                            {m.worker_note ? ` — ${m.worker_note}` : ''}
+                          </div>
+                          {!isReadOnly && (
+                            reschedulingId === m.id ? (
+                              <div className="flex items-center gap-2 pt-1">
+                                <input type="datetime-local" value={rescheduleDate} onChange={e => setRescheduleDate(e.target.value)}
+                                  className="flex-1 border border-amber-300 rounded-lg px-2 py-1.5 text-xs bg-white focus:outline-none [color-scheme:light]" />
+                                <button onClick={() => handleReschedule(m)} disabled={!rescheduleDate || reschedulingSaving}
+                                  className="bg-zinc-900 text-white px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider disabled:opacity-40 cursor-pointer">
+                                  {reschedulingSaving ? 'Saving...' : 'Confirm'}
+                                </button>
+                                <button onClick={() => { setReschedulingId(null); setRescheduleDate(''); }}
+                                  className="text-zinc-400 hover:text-zinc-600 px-1 cursor-pointer">
+                                  <X className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            ) : (
+                              <button onClick={() => setReschedulingId(m.id)}
+                                className="text-[10px] font-bold uppercase tracking-wider underline cursor-pointer">
+                                Set new time
+                              </button>
+                            )
+                          )}
                         </div>
                       )}
                     </div>
