@@ -40,6 +40,7 @@ export default function WorkerDashboard() {
   const [submittingId, setSubmittingId] = useState<string | null>(null);
   const [noteDrafts, setNoteDrafts] = useState<Record<string, string>>({});
   const [uploadingPhoto, setUploadingPhoto] = useState<string | null>(null);
+  const [failedUploads, setFailedUploads] = useState<Record<string, { file: File; offline: boolean }>>({});
 
   useEffect(() => { init(); }, []);
 
@@ -106,9 +107,7 @@ export default function WorkerDashboard() {
     }
   };
 
-  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>, jobId: string, type: 'before' | 'after') => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  const uploadPhoto = async (jobId: string, type: 'before' | 'after', file: File) => {
     const key = `${jobId}-${type}`;
     setUploadingPhoto(key);
     try {
@@ -133,12 +132,31 @@ export default function WorkerDashboard() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
+
       await refresh();
+      setFailedUploads(prev => {
+        const next = { ...prev };
+        delete next[key];
+        return next;
+      });
     } catch (err: any) {
-      alert('Photo upload failed: ' + err.message);
+      setFailedUploads(prev => ({ ...prev, [key]: { file, offline: !navigator.onLine } }));
     } finally {
       setUploadingPhoto(null);
     }
+  };
+
+  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>, jobId: string, type: 'before' | 'after') => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    await uploadPhoto(jobId, type, file);
+  };
+
+  const retryUpload = (jobId: string, type: 'before' | 'after') => {
+    const key = `${jobId}-${type}`;
+    const pending = failedUploads[key];
+    if (!pending) return;
+    uploadPhoto(jobId, type, pending.file);
   };
 
   const handleLogout = async () => {
@@ -153,8 +171,8 @@ export default function WorkerDashboard() {
   };
 
   if (loading) return (
-    <div className="min-h-screen bg-zinc-950 flex items-center justify-center">
-      <div className="h-6 w-6 border-2 border-zinc-700 border-t-white rounded-full animate-spin" />
+    <div className="min-h-screen bg-zinc-50 flex items-center justify-center">
+      <div className="h-6 w-6 border-2 border-zinc-300 border-t-zinc-800 rounded-full animate-spin" />
     </div>
   );
 
@@ -162,14 +180,16 @@ export default function WorkerDashboard() {
   const history = jobs.filter(j => ['completed', 'no_show'].includes(j.worker_status || ''));
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-zinc-100 font-sans antialiased">
-      <header className="border-b border-zinc-800 sticky top-0 bg-zinc-950/90 backdrop-blur-md z-40">
+    <div className="min-h-screen bg-zinc-50 font-sans antialiased">
+      <header className="bg-white border-b border-zinc-200 sticky top-0 z-40">
         <div className="max-w-2xl mx-auto px-4 h-14 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Calendar className="w-4 h-4 text-zinc-400" />
-            <h1 className="text-sm font-black tracking-tight">My Jobs</h1>
+            <div className="p-1.5 bg-zinc-900 rounded-lg">
+              <Calendar className="w-3.5 h-3.5 text-white" />
+            </div>
+            <h1 className="text-sm font-black tracking-tight text-zinc-900">My Jobs</h1>
           </div>
-          <button onClick={handleLogout} className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-zinc-400 hover:text-white transition cursor-pointer">
+          <button onClick={handleLogout} className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-zinc-400 hover:text-zinc-700 transition cursor-pointer px-3 py-2 rounded-xl hover:bg-zinc-100">
             <LogOut className="w-3.5 h-3.5" /> Log Out
           </button>
         </div>
@@ -177,9 +197,9 @@ export default function WorkerDashboard() {
 
       <main className="max-w-2xl mx-auto px-4 py-6 space-y-6">
         <section className="space-y-3">
-          <h2 className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">Upcoming &amp; Active</h2>
+          <h2 className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">Upcoming &amp; Active</h2>
           {upcoming.length === 0 ? (
-            <p className="text-xs text-zinc-500 italic border border-dashed border-zinc-800 rounded-xl p-6 text-center">
+            <p className="text-xs text-zinc-400 italic border border-dashed border-zinc-300 rounded-2xl p-8 text-center">
               No jobs assigned right now.
             </p>
           ) : upcoming.map(job => {
@@ -188,35 +208,35 @@ export default function WorkerDashboard() {
             const flagged = job.worker_status === 'issue_reported';
 
             return (
-              <div key={job.id} className={`p-4 rounded-2xl border space-y-3 ${flagged ? 'border-amber-700/50 bg-amber-950/20' : 'border-zinc-800 bg-zinc-900/50'}`}>
+              <div key={job.id} className={`p-4 rounded-2xl border space-y-3 ${flagged ? 'border-amber-200 bg-amber-50' : 'border-zinc-200 bg-white'}`}>
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <h3 className="text-sm font-bold text-white">{job.title}</h3>
-                    <p className="text-xs text-zinc-400 mt-0.5">{portal?.client_name} — {portal?.project_name}</p>
+                    <h3 className="text-sm font-black text-zinc-900">{job.title}</h3>
+                    <p className="text-xs text-zinc-500 mt-0.5">{portal?.client_name} — {portal?.project_name}</p>
                     {portal?.client_address && (
-                      <p className="text-[11px] text-zinc-500 mt-1 flex items-center gap-1">
+                      <p className="text-[11px] text-zinc-400 mt-1 flex items-center gap-1">
                         <MapPin className="w-3 h-3" /> {portal.client_address}
                       </p>
                     )}
                   </div>
-                  <span className="shrink-0 text-[10px] font-bold uppercase tracking-wider bg-zinc-800 border border-zinc-700 px-2 py-1 rounded-lg flex items-center gap-1">
+                  <span className="shrink-0 text-[10px] font-bold uppercase tracking-wider bg-zinc-100 border border-zinc-200 text-zinc-600 px-2 py-1 rounded-lg flex items-center gap-1">
                     <Clock className="w-3 h-3" /> {formatScheduled(job.scheduled_at)}
                   </span>
                 </div>
 
                 {job.description && (
-                  <p className="text-xs text-zinc-300 leading-relaxed">{job.description}</p>
+                  <p className="text-xs text-zinc-600 leading-relaxed">{job.description}</p>
                 )}
 
                 {job.payment_request && (
-                  <div className="text-[11px] font-medium text-amber-300 bg-amber-500/10 border border-amber-500/20 px-2.5 py-1.5 rounded-lg flex items-center gap-1.5 w-fit">
+                  <div className="text-[11px] font-medium text-amber-700 bg-amber-50 border border-amber-200 px-2.5 py-1.5 rounded-lg flex items-center gap-1.5 w-fit">
                     <DollarSign className="w-3 h-3" />
                     {hasOnlinePayment ? 'Online payment link on file (client pays via portal)' : job.payment_request}
                   </div>
                 )}
 
                 {flagged && job.worker_note && (
-                  <div className="text-[11px] text-amber-300 bg-amber-500/10 border border-amber-500/20 px-2.5 py-1.5 rounded-lg flex items-start gap-1.5">
+                  <div className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 px-2.5 py-1.5 rounded-lg flex items-start gap-1.5">
                     <AlertTriangle className="w-3 h-3 mt-0.5 shrink-0" /> Reschedule requested — manager notified: {job.worker_note}
                   </div>
                 )}
@@ -226,14 +246,29 @@ export default function WorkerDashboard() {
                   {(['before', 'after'] as const).map(type => {
                     const url = type === 'before' ? job.photo_before_url : job.photo_after_url;
                     const key = `${job.id}-${type}`;
+                    const failed = failedUploads[key];
+
+                    if (failed) {
+                      return (
+                        <button key={type} type="button" onClick={() => retryUpload(job.id, type)}
+                          disabled={uploadingPhoto === key}
+                          className="flex-1 border border-dashed border-amber-300 bg-amber-50 rounded-xl p-2 text-center transition disabled:opacity-50 cursor-pointer">
+                          <AlertTriangle className="w-4 h-4 text-amber-500 mx-auto mb-1" />
+                          <span className="text-[9px] font-bold uppercase tracking-wider text-amber-700 block">
+                            {uploadingPhoto === key ? 'Retrying...' : failed.offline ? 'No connection — Tap to retry' : 'Upload failed — Tap to retry'}
+                          </span>
+                        </button>
+                      );
+                    }
+
                     return (
-                      <label key={type} className="flex-1 border border-dashed border-zinc-700 hover:border-zinc-500 rounded-xl p-2 text-center cursor-pointer transition">
+                      <label key={type} className="flex-1 border border-dashed border-zinc-300 hover:border-zinc-400 rounded-xl p-2 text-center cursor-pointer transition">
                         {url ? (
                           <img src={url} alt={`${type} photo`} className="h-16 w-full object-cover rounded-lg mb-1" />
                         ) : (
-                          <Camera className="w-4 h-4 text-zinc-500 mx-auto mb-1" />
+                          <Camera className="w-4 h-4 text-zinc-400 mx-auto mb-1" />
                         )}
-                        <span className="text-[9px] font-bold uppercase tracking-wider text-zinc-400 block">
+                        <span className="text-[9px] font-bold uppercase tracking-wider text-zinc-500 block">
                           {uploadingPhoto === key ? 'Uploading...' : url ? `Replace ${type}` : `Add ${type} photo`}
                         </span>
                         <input type="file" accept="image/*" className="hidden" disabled={uploadingPhoto === key}
@@ -245,31 +280,31 @@ export default function WorkerDashboard() {
 
                 {/* Actions */}
                 {job.worker_status !== 'completed' && (
-                  <div className="space-y-2 pt-2 border-t border-zinc-800">
+                  <div className="space-y-2 pt-2 border-t border-zinc-100">
                     <textarea
                       value={noteDrafts[job.id] || ''}
                       onChange={(e) => setNoteDrafts(prev => ({ ...prev, [job.id]: e.target.value }))}
                       placeholder="Note for manager (only needed for no-show / reschedule)..."
                       rows={2}
-                      className="w-full bg-zinc-800 border border-zinc-700 rounded-xl text-xs px-3 py-2 text-white placeholder-zinc-500 focus:outline-none focus:border-zinc-500 transition resize-none"
+                      className="w-full border border-zinc-200 rounded-xl text-xs px-3 py-2 text-zinc-900 placeholder-zinc-400 focus:outline-none focus:border-zinc-900 transition resize-none"
                     />
                     <div className="grid grid-cols-3 gap-2">
                       <button
                         onClick={() => handleAction(job.id, 'complete')}
                         disabled={submittingId === job.id}
-                        className="flex items-center justify-center gap-1.5 bg-white text-zinc-900 text-[10px] font-bold uppercase tracking-wider py-2.5 rounded-xl hover:bg-zinc-200 transition cursor-pointer disabled:opacity-50">
+                        className="flex items-center justify-center gap-1.5 bg-zinc-900 text-white text-[10px] font-bold uppercase tracking-wider py-2.5 rounded-xl hover:bg-zinc-700 transition cursor-pointer disabled:opacity-50">
                         <CheckCircle2 className="w-3.5 h-3.5" /> Complete
                       </button>
                       <button
                         onClick={() => handleAction(job.id, 'no_show')}
                         disabled={submittingId === job.id}
-                        className="flex items-center justify-center gap-1.5 border border-rose-800 text-rose-300 text-[10px] font-bold uppercase tracking-wider py-2.5 rounded-xl hover:bg-rose-950/40 transition cursor-pointer disabled:opacity-50">
+                        className="flex items-center justify-center gap-1.5 border border-rose-200 text-rose-600 text-[10px] font-bold uppercase tracking-wider py-2.5 rounded-xl hover:bg-rose-50 transition cursor-pointer disabled:opacity-50">
                         No Show
                       </button>
                       <button
                         onClick={() => handleAction(job.id, 'reschedule_needed')}
                         disabled={submittingId === job.id}
-                        className="flex items-center justify-center gap-1.5 border border-amber-800 text-amber-300 text-[10px] font-bold uppercase tracking-wider py-2.5 rounded-xl hover:bg-amber-950/40 transition cursor-pointer disabled:opacity-50">
+                        className="flex items-center justify-center gap-1.5 border border-amber-200 text-amber-600 text-[10px] font-bold uppercase tracking-wider py-2.5 rounded-xl hover:bg-amber-50 transition cursor-pointer disabled:opacity-50">
                         Reschedule
                       </button>
                     </div>
@@ -282,19 +317,19 @@ export default function WorkerDashboard() {
 
         {history.length > 0 && (
           <section className="space-y-3">
-            <h2 className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">History</h2>
+            <h2 className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">History</h2>
             {history.map(job => {
               const portal = getPortalInfo(job.client_portals);
               return (
-                <div key={job.id} className="p-3 rounded-xl border border-zinc-800 bg-zinc-900/30 flex items-center justify-between gap-3 opacity-70">
+                <div key={job.id} className="p-3 rounded-xl border border-zinc-200 bg-white flex items-center justify-between gap-3 opacity-70">
                   <div>
-                    <p className="text-xs font-bold text-white">{job.title}</p>
-                    <p className="text-[10px] text-zinc-500">{portal?.client_name} — {portal?.project_name}</p>
+                    <p className="text-xs font-bold text-zinc-900">{job.title}</p>
+                    <p className="text-[10px] text-zinc-400">{portal?.client_name} — {portal?.project_name}</p>
                   </div>
                   <span className={`text-[9px] font-bold uppercase tracking-wider px-2 py-1 rounded-lg shrink-0 ${
                     job.worker_status === 'completed'
-                      ? 'bg-emerald-900/40 text-emerald-300 border border-emerald-800/50'
-                      : 'bg-rose-900/40 text-rose-300 border border-rose-800/50'
+                      ? 'bg-emerald-50 text-emerald-600 border border-emerald-100'
+                      : 'bg-rose-50 text-rose-600 border border-rose-100'
                   }`}>
                     {job.worker_status === 'completed' ? 'Completed' : 'No Show'}
                   </span>

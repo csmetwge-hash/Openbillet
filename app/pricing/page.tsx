@@ -70,25 +70,23 @@ export default function PricingPage() {
   ];
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-zinc-50 font-sans antialiased relative">
-      <div className="absolute inset-0 bg-[linear-gradient(to_right,#18181b_1px,transparent_1px),linear-gradient(to_bottom,#18181b_1px,transparent_1px)] bg-[size:4rem_4rem] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_30%,#000_70%,transparent_100%)] opacity-40 pointer-events-none" />
-
-      <div className="relative z-10 max-w-2xl mx-auto px-6 py-16 space-y-10">
-        <Link href="/" className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-zinc-500 hover:text-white transition">
+    <div className="min-h-screen bg-zinc-50 text-zinc-900 font-sans antialiased">
+      <div className="max-w-2xl mx-auto px-6 py-16 space-y-10">
+        <Link href="/" className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-zinc-400 hover:text-zinc-900 transition">
           <ArrowLeft className="w-3.5 h-3.5" /> Back
         </Link>
 
         <div className="text-center space-y-3">
-          <p className="text-[10px] font-bold tracking-widest uppercase text-zinc-500">Pricing</p>
-          <h1 className="text-3xl font-black tracking-tight text-white">One plan. Everything included.</h1>
-          <p className="text-sm text-zinc-400 max-w-sm mx-auto">No tiers, no feature limits, no surprises.</p>
+          <p className="text-[10px] font-bold tracking-widest uppercase text-zinc-400">Pricing</p>
+          <h1 className="text-3xl font-black tracking-tight text-zinc-900">One plan. Everything included.</h1>
+          <p className="text-sm text-zinc-500 max-w-sm mx-auto">No tiers, no feature limits, no surprises.</p>
 
           {/* Billing toggle */}
-          <div className="inline-flex items-center bg-zinc-900 border border-zinc-800 p-1 rounded-xl mt-2">
+          <div className="inline-flex items-center bg-white border border-zinc-200 p-1 rounded-xl mt-2">
             <button
               onClick={() => setBilling('monthly')}
               className={`text-[10px] font-bold uppercase tracking-wider px-5 py-2 rounded-lg transition cursor-pointer ${
-                billing === 'monthly' ? 'bg-zinc-800 text-white border border-zinc-700' : 'text-zinc-500 hover:text-zinc-300'
+                billing === 'monthly' ? 'bg-zinc-900 text-white' : 'text-zinc-400 hover:text-zinc-700'
               }`}
             >
               Monthly
@@ -96,43 +94,43 @@ export default function PricingPage() {
             <button
               onClick={() => setBilling('annual')}
               className={`text-[10px] font-bold uppercase tracking-wider px-5 py-2 rounded-lg transition cursor-pointer ${
-                billing === 'annual' ? 'bg-zinc-800 text-white border border-zinc-700' : 'text-zinc-500 hover:text-zinc-300'
+                billing === 'annual' ? 'bg-zinc-900 text-white' : 'text-zinc-400 hover:text-zinc-700'
               }`}
             >
-              Annual <span className="text-emerald-400 font-mono text-[9px] normal-case ml-1">2 months free</span>
+              Annual <span className="text-emerald-500 font-mono text-[9px] normal-case ml-1">2 months free</span>
             </button>
           </div>
         </div>
 
-        <div className="bg-zinc-900/50 border border-zinc-700 rounded-3xl p-8 md:p-10 shadow-2xl shadow-zinc-950/50">
+        <div className="bg-white border border-zinc-200 rounded-3xl p-8 md:p-10 shadow-sm">
 
           {/* Price display */}
           <div className="mb-2">
             {billing === 'monthly' ? (
               <div className="flex items-baseline gap-2">
-                <span className="text-5xl font-black text-white">$74</span>
-                <span className="text-sm text-zinc-500 font-medium">/ month</span>
+                <span className="text-5xl font-black text-zinc-900">$74</span>
+                <span className="text-sm text-zinc-400 font-medium">/ month</span>
               </div>
             ) : (
               <div>
                 <div className="flex items-baseline gap-2">
-                  <span className="text-5xl font-black text-white">$740</span>
-                  <span className="text-sm text-zinc-500 font-medium">/ year</span>
+                  <span className="text-5xl font-black text-zinc-900">$740</span>
+                  <span className="text-sm text-zinc-400 font-medium">/ year</span>
                 </div>
                 <div className="flex items-center gap-2 mt-1">
-                  <span className="text-sm text-emerald-400 font-bold">$62/month effective</span>
-                  <span className="text-xs text-zinc-600 line-through">$888/yr</span>
-                  <span className="text-[10px] font-black text-emerald-500 bg-emerald-950/50 border border-emerald-900 px-2 py-0.5 rounded-full">Save $148</span>
+                  <span className="text-sm text-emerald-600 font-bold">$62/month effective</span>
+                  <span className="text-xs text-zinc-400 line-through">$888/yr</span>
+                  <span className="text-[10px] font-black text-emerald-600 bg-emerald-50 border border-emerald-100 px-2 py-0.5 rounded-full">Save $148</span>
                 </div>
               </div>
             )}
           </div>
 
-          <p className="text-xs text-zinc-500 mb-8">{current.sub}</p>
+          <p className="text-xs text-zinc-400 mb-8">{current.sub}</p>
 
           <ul className="space-y-3 mb-8">
             {features.map(feat => (
-              <li key={feat} className="flex items-start gap-2.5 text-sm font-medium text-zinc-300">
+              <li key={feat} className="flex items-start gap-2.5 text-sm font-medium text-zinc-700">
                 <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
                 {feat}
               </li>
@@ -142,19 +140,19 @@ export default function PricingPage() {
           <button
             onClick={handleSubscribe}
             disabled={loading}
-            className="w-full bg-white text-black py-4 rounded-xl font-bold text-sm hover:bg-zinc-200 transition cursor-pointer disabled:opacity-50 flex items-center justify-center gap-2"
+            className="w-full bg-zinc-900 text-white py-4 rounded-xl font-bold text-sm hover:bg-zinc-700 transition cursor-pointer disabled:opacity-50 flex items-center justify-center gap-2"
           >
             {loading ? 'Redirecting...' : `Get Started — ${billing === 'monthly' ? '$74/mo' : '$740/yr'}`}
             {!loading && <ArrowRight className="w-4 h-4" />}
           </button>
-          <p className="text-center text-xs text-zinc-600 mt-3">
+          <p className="text-center text-xs text-zinc-400 mt-3">
             Payments processed securely by Stripe · Cancel anytime
           </p>
         </div>
 
-        <p className="text-center text-xs text-zinc-600">
+        <p className="text-center text-xs text-zinc-400">
           Already have an account?{' '}
-          <Link href="/auth" className="text-zinc-400 hover:text-white underline transition">Sign in</Link>
+          <Link href="/auth" className="text-zinc-600 hover:text-zinc-900 underline transition">Sign in</Link>
         </p>
       </div>
     </div>
