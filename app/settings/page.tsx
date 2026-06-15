@@ -303,24 +303,24 @@ export default function SettingsPage() {
             </div>
 
             {teamMembers.map(member => (
-              <div key={member.id} className="flex items-center justify-between p-3 border border-zinc-100 rounded-xl">
-                <div className="flex items-center gap-2.5 min-w-0">
-                  <div className="p-1.5 bg-zinc-100 rounded-lg shrink-0">
+              <div key={member.id} className="flex items-start justify-between gap-2 p-3 border border-zinc-100 rounded-xl">
+                <div className="flex items-start gap-2.5 min-w-0 flex-1">
+                  <div className="p-1.5 bg-zinc-100 rounded-lg shrink-0 mt-0.5">
                     {getRoleIcon(member.role)}
                   </div>
-                  <div className="min-w-0">
+                  <div className="min-w-0 flex-1">
                     <p className="text-xs font-semibold text-zinc-900 truncate">{member.member_email}</p>
-                    <div className="flex items-center gap-2 mt-0.5">
+                    <div className="flex items-center gap-2 mt-1 flex-wrap">
                       <select
                         value={member.role}
                         onChange={(e) => updateMemberRole(member.id, e.target.value)}
-                        className="text-[10px] border border-zinc-200 rounded px-1.5 py-0.5 bg-white text-zinc-600 focus:outline-none cursor-pointer"
+                        className="text-[10px] border border-zinc-200 rounded px-1.5 py-1 bg-white text-zinc-600 focus:outline-none cursor-pointer max-w-full"
                       >
                         <option value="user">Viewer</option>
                         <option value="admin">Admin</option>
                         <option value="worker">Field Worker</option>
                       </select>
-                      <span className={`text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded ${
+                      <span className={`text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded shrink-0 ${
                         member.status === 'active' ? 'bg-emerald-50 text-emerald-600' : 'bg-amber-50 text-amber-600'
                       }`}>
                         {member.status === 'active' ? 'Active' : 'Invited'}
