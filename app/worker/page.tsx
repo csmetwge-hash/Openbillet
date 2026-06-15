@@ -271,7 +271,7 @@ export default function WorkerDashboard() {
                         <span className="text-[9px] font-bold uppercase tracking-wider text-zinc-500 block">
                           {uploadingPhoto === key ? 'Uploading...' : url ? `Replace ${type}` : `Add ${type} photo`}
                         </span>
-                        <input type="file" accept="image/*" className="hidden" disabled={uploadingPhoto === key}
+                        <input type="file" accept="image/*" capture="environment" className="hidden" disabled={uploadingPhoto === key}
                           onChange={(e) => handlePhotoUpload(e, job.id, type)} />
                       </label>
                     );
