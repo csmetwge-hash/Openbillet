@@ -2,7 +2,7 @@
   "name": "OpenBillet",
   "short_name": "OpenBillet",
   "description": "Client portals, milestone tracking, and field job management.",
-  "start_url": "/",
+  "start_url": "/admin",
   "scope": "/",
   "display": "standalone",
   "background_color": "#18181b",
