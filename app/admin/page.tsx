@@ -420,9 +420,9 @@ export default function AdminPage() {
                           <ClipboardCopy className="w-3.5 h-3.5" />
                           {copiedToken === p.magic_token ? 'Copied!' : 'Copy Link'}
                         </button>
-                        <Link href={`/portal/${p.magic_token}`} target="_blank"
+                        <Link href={`/portal/${p.magic_token}`}
                           className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider border border-zinc-200 bg-white hover:bg-zinc-50 text-zinc-600 px-3 py-2 rounded-xl transition">
-                          <Eye className="w-3.5 h-3.5" /> View ↗
+                          <Eye className="w-3.5 h-3.5" /> View
                         </Link>
                         <button
                           onClick={() => handleToggleArchive(p.id, p.status)}
