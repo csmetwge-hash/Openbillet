@@ -1,4 +1,4 @@
-const CACHE_NAME = 'openbillet-shell-v1';
+const CACHE_NAME = 'openbillet-shell-v2';
 const PRECACHE_URLS = [
   '/offline.html',
   '/manifest.json',
