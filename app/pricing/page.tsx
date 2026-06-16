@@ -13,16 +13,16 @@ export default function PricingPage() {
   const prices = {
     monthly: {
       id: process.env.NEXT_PUBLIC_STRIPE_PRICE_ID || 'price_MONTHLY_PLACEHOLDER',
-      amount: 74,
+      amount: 37,
       label: '/ month',
       sub: 'Billed monthly · Cancel anytime',
     },
     annual: {
       id: process.env.NEXT_PUBLIC_STRIPE_PRICE_ID_ANNUAL || 'price_ANNUAL_PLACEHOLDER',
-      amount: 740,
-      monthlyRate: 62,
+      amount: 370,
+      monthlyRate: 30.83,
       label: '/ year',
-      sub: 'Billed annually · Save $148 — 2 months free',
+      sub: 'Billed annually · Save $74 — 2 months free',
     },
   };
 
@@ -108,19 +108,19 @@ export default function PricingPage() {
           <div className="mb-2">
             {billing === 'monthly' ? (
               <div className="flex items-baseline gap-2">
-                <span className="text-5xl font-black text-zinc-900">$74</span>
+                <span className="text-5xl font-black text-zinc-900">$37</span>
                 <span className="text-sm text-zinc-400 font-medium">/ month</span>
               </div>
             ) : (
               <div>
                 <div className="flex items-baseline gap-2">
-                  <span className="text-5xl font-black text-zinc-900">$740</span>
+                  <span className="text-5xl font-black text-zinc-900">$370</span>
                   <span className="text-sm text-zinc-400 font-medium">/ year</span>
                 </div>
                 <div className="flex items-center gap-2 mt-1">
-                  <span className="text-sm text-emerald-600 font-bold">$62/month effective</span>
-                  <span className="text-xs text-zinc-400 line-through">$888/yr</span>
-                  <span className="text-[10px] font-black text-emerald-600 bg-emerald-50 border border-emerald-100 px-2 py-0.5 rounded-full">Save $148</span>
+                  <span className="text-sm text-emerald-600 font-bold">$30.83/month effective</span>
+                  <span className="text-xs text-zinc-400 line-through">$444/yr</span>
+                  <span className="text-[10px] font-black text-emerald-600 bg-emerald-50 border border-emerald-100 px-2 py-0.5 rounded-full">Save $74</span>
                 </div>
               </div>
             )}
@@ -142,7 +142,7 @@ export default function PricingPage() {
             disabled={loading}
             className="w-full bg-zinc-900 text-white py-4 rounded-xl font-bold text-sm hover:bg-zinc-700 transition cursor-pointer disabled:opacity-50 flex items-center justify-center gap-2"
           >
-            {loading ? 'Redirecting...' : `Get Started — ${billing === 'monthly' ? '$74/mo' : '$740/yr'}`}
+            {loading ? 'Redirecting...' : `Get Started — ${billing === 'monthly' ? '$37/mo' : '$370/yr'}`}
             {!loading && <ArrowRight className="w-4 h-4" />}
           </button>
           <p className="text-center text-xs text-zinc-400 mt-3">

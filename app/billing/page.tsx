@@ -115,7 +115,7 @@ export default function BillingPage() {
             <div className="border border-zinc-200 rounded-2xl p-6 bg-white space-y-4">
               <div className="flex items-start justify-between">
                 <div>
-                  <div className="text-2xl font-black text-zinc-900">$74<span className="text-sm font-normal text-zinc-400">/mo</span></div>
+                  <div className="text-2xl font-black text-zinc-900">$37<span className="text-sm font-normal text-zinc-400">/mo</span></div>
                   <p className="text-xs text-zinc-400 mt-0.5">Billed monthly · Cancel anytime</p>
                 </div>
               </div>
@@ -133,11 +133,11 @@ export default function BillingPage() {
                 Best Value
               </div>
               <div>
-                <div className="text-2xl font-black text-zinc-900">$740<span className="text-sm font-normal text-zinc-400">/yr</span></div>
+                <div className="text-2xl font-black text-zinc-900">$370<span className="text-sm font-normal text-zinc-400">/yr</span></div>
                 <div className="flex items-center gap-2 mt-0.5">
-                  <span className="text-xs text-emerald-600 font-bold">$62/month</span>
-                  <span className="text-xs text-zinc-400 line-through">$888/yr</span>
-                  <span className="text-[10px] font-black text-emerald-600">Save $148</span>
+                  <span className="text-xs text-emerald-600 font-bold">$30.83/month</span>
+                  <span className="text-xs text-zinc-400 line-through">$444/yr</span>
+                  <span className="text-[10px] font-black text-emerald-600">Save $74</span>
                 </div>
                 <p className="text-xs text-zinc-400 mt-0.5">Billed annually · 2 months free</p>
               </div>
