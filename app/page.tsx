@@ -1,103 +1,101 @@
-'use client';
-
-import { useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import type { Metadata } from 'next';
 import {
-  Sparkles, ArrowRight, CheckCircle2, Camera, Link2,
-  MessageSquare, FileText, Shield, Zap, ChevronDown,
-  Star, Users, Clock,
+  Sparkles, ArrowRight, CheckCircle2, Camera,
+  Link2, MessageSquare, FileText, Shield, Zap,
+  Users, Clock,
 } from 'lucide-react';
+import PricingToggle from '@/components/PricingToggle';
+import FaqAccordion from '@/components/FaqAccordion';
+
+export const metadata: Metadata = {
+  title: 'OpenBillet — Client Portals for Service Businesses',
+  description: 'Give every client their own private portal with job milestones, before & after photos, proposals, invoices, and real-time updates. No login required. Built for landscaping, pest control, HVAC, contracting, and more.',
+  keywords: 'client portal, field service software, job tracking, landscaping software, pest control software, contractor client portal, milestone tracking, before after photos, white label client portal',
+  openGraph: {
+    title: 'OpenBillet — Client Portals for Service Businesses',
+    description: 'Give every client their own private portal with job milestones, before & after photos, proposals, and real-time updates. No login required.',
+    url: 'https://openbillet.com',
+    siteName: 'OpenBillet',
+    type: 'website',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'OpenBillet — Client Portals for Service Businesses',
+    description: 'Give every client their own private portal. No login required. Built for field service businesses.',
+  },
+  alternates: {
+    canonical: 'https://openbillet.com',
+  },
+};
+
+const features = [
+  {
+    icon: <Link2 className="w-5 h-5 text-white" />,
+    title: 'Instant Magic Link Access',
+    description: 'Send your client a link. They tap it and they\'re inside their private workspace instantly — no account creation, no password, no app download. Works in any browser on any device.',
+    tag: 'Zero friction',
+  },
+  {
+    icon: <Camera className="w-5 h-5 text-white" />,
+    title: 'Before & After Photo Milestones',
+    description: 'Upload before and after photos directly to each job milestone. Your client sees the proof of work side by side in their portal. Build trust and eliminate disputes.',
+    tag: 'Build trust',
+  },
+  {
+    icon: <FileText className="w-5 h-5 text-white" />,
+    title: 'Proposals, Invoices & Receipts',
+    description: 'Send professional proposals with line items and get a typed digital signature. Generate itemized invoices and PDF receipts per milestone or across the full project.',
+    tag: 'Get paid faster',
+  },
+  {
+    icon: <MessageSquare className="w-5 h-5 text-white" />,
+    title: 'Real-Time Client Messaging',
+    description: 'Communicate with clients directly inside their portal. No more lost text threads or missed emails. Every message is attached to the project, forever.',
+    tag: 'All in one place',
+  },
+  {
+    icon: <Shield className="w-5 h-5 text-white" />,
+    title: 'White-Label Every Portal',
+    description: 'Every client workspace carries your brand — your logo, your company name. Your clients see a professional experience. They never see OpenBillet.',
+    tag: 'Your brand',
+  },
+  {
+    icon: <Zap className="w-5 h-5 text-white" />,
+    title: 'Automated Client Notifications',
+    description: 'Clients get notified the moment you upload a file, complete a milestone, or send a proposal. No more chasing for responses — the system follows up for you.',
+    tag: 'Save hours weekly',
+  },
+];
+
+const faqs = [
+  {
+    q: 'Do my clients need to download an app or create an account?',
+    a: 'No. Each client gets a unique magic link. They click it and they\'re inside their private workspace instantly — no signup, no app, no password. Works on any phone or computer.',
+  },
+  {
+    q: 'How does the before and after photo feature work?',
+    a: 'When you create a milestone for a job, you can upload a before photo when you start and an after photo when you finish. Your client sees both images side by side in their portal, with a clear record of the work completed.',
+  },
+  {
+    q: 'Can I use my own payment processor?',
+    a: 'Yes — and we never touch your payments. Paste any payment link (Stripe, Square, PayPal, Venmo, whatever you use) into a milestone and it renders as a Pay Now button inside the client portal. We take zero transaction fees.',
+  },
+  {
+    q: 'Can my team members access the platform?',
+    a: 'Yes. You can invite team members as Admin (full access), Viewer (read-only), or Field Worker (sees only their assigned jobs). Each gets the right level of access.',
+  },
+  {
+    q: 'Is there a contract or can I cancel anytime?',
+    a: 'No contracts. Cancel anytime from your billing portal. Your data is yours — we don\'t hold it hostage.',
+  },
+  {
+    q: 'What kinds of businesses is OpenBillet built for?',
+    a: 'Any service business that completes jobs for clients — landscaping, pest control, HVAC, plumbing, cleaning, contracting, digital agencies, consultants. If you do project-based work and want your clients to feel informed and taken care of, OpenBillet is built for you.',
+  },
+];
 
 export default function LandingPage() {
-  const [activeFaq, setActiveFaq] = useState<number | null>(null);
-  const [billing, setBilling] = useState<'monthly' | 'annual'>('monthly');
-  const router = useRouter();
-
-  const features = [
-    {
-      icon: <Link2 className="w-5 h-5 text-white" />,
-      title: 'Instant Magic Link Access',
-      description: 'Send your client a link. They tap it and they\'re inside their private workspace — no account creation, no password, no app download. Works in any browser on any device.',
-      tag: 'Zero friction'
-    },
-    {
-      icon: <Camera className="w-5 h-5 text-white" />,
-      title: 'Before & After Photo Milestones',
-      description: 'Upload before and after photos directly to each job milestone. Your client sees the proof of work side by side in their portal. Build trust and eliminate disputes.',
-      tag: 'Industry first'
-    },
-    {
-      icon: <FileText className="w-5 h-5 text-white" />,
-      title: 'Proposals, Invoices & Receipts',
-      description: 'Send professional proposals with line items and get a typed digital signature. Generate itemized invoices and PDF receipts per milestone or across the full project.',
-      tag: 'Get paid faster'
-    },
-    {
-      icon: <MessageSquare className="w-5 h-5 text-white" />,
-      title: 'Real-Time Client Messaging',
-      description: 'Communicate with clients directly inside their portal. No more lost text threads or missed emails. Every message is attached to the project, forever.',
-      tag: 'All in one place'
-    },
-    {
-      icon: <Shield className="w-5 h-5 text-white" />,
-      title: 'White-Label Every Portal',
-      description: 'Every client workspace carries your brand — your logo, your company name. Your clients see a professional experience. They never see OpenBillet.',
-      tag: 'Your brand'
-    },
-    {
-      icon: <Zap className="w-5 h-5 text-white" />,
-      title: 'Automated Client Notifications',
-      description: 'Clients get notified the moment you upload a file, complete a milestone, or send a proposal. No more chasing for responses — the system follows up for you.',
-      tag: 'Save hours weekly'
-    },
-  ];
-
-  const faqs = [
-    {
-      q: 'Do my clients need to download an app or create an account?',
-      a: 'No. Each client gets a unique magic link. They click it and they\'re inside their private workspace instantly — no signup, no app, no password. Works on any phone or computer.'
-    },
-    {
-      q: 'How does the before and after photo feature work?',
-      a: 'When you create a milestone for a job, you can upload a before photo when you start and an after photo when you finish. Your client sees both images side by side in their portal, with a clear record of the work completed.'
-    },
-    {
-      q: 'Can I use my own payment processor?',
-      a: 'Yes — and we never touch your payments. Paste any payment link (Stripe, Square, PayPal, Venmo, whatever you use) into a milestone and it renders as a Pay Now button inside the client portal. We take zero transaction fees.'
-    },
-    {
-      q: 'Can my team members access the platform?',
-      a: 'Yes. You can invite team members with full admin access or view-only access. Field techs, office staff, silent partners — each gets the right level of access.'
-    },
-    {
-      q: 'Is there a contract or can I cancel anytime?',
-      a: 'No contracts. Cancel anytime from your billing portal. Your data is yours — we don\'t hold it hostage.'
-    },
-    {
-      q: 'What kinds of businesses is OpenBillet built for?',
-      a: 'Any service business that completes jobs for clients — landscaping, pest control, HVAC, plumbing, cleaning, contracting, digital agencies, consultants. If you do project-based work and want your clients to feel informed and taken care of, OpenBillet is built for you.'
-    },
-  ];
-
-  const testimonialPlaceholders = [
-    {
-      quote: 'Our clients love being able to see the before and after photos without us having to text them separately. It looks so professional.',
-      name: 'Owner, Landscaping Company',
-      location: 'Florida'
-    },
-    {
-      quote: 'I set up a portal for a new client in under 5 minutes. They clicked the link and immediately saw their project roadmap. No confusion, no back and forth.',
-      name: 'Owner, Pest Control Company',
-      location: 'Texas'
-    },
-    {
-      quote: 'Finally something built for people like us who are in the field all day. Everything is on my phone, it just works.',
-      name: 'Owner, General Contracting',
-      location: 'Georgia'
-    },
-  ];
-
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-50 font-sans antialiased selection:bg-white selection:text-black">
 
@@ -137,29 +135,29 @@ export default function LandingPage() {
         </h1>
 
         <p className="text-base sm:text-lg text-zinc-400 max-w-2xl mx-auto leading-relaxed font-medium">
-          OpenBillet gives every client their own private portal — with job milestones, before & after photos, file delivery, proposals, and real-time updates. They tap a link. No login required.
+          OpenBillet gives every client their own private portal — with job milestones, before &amp; after photos, file delivery, proposals, and real-time updates. They tap a link. No login required.
         </p>
 
         <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
-          <button onClick={() => router.push('/auth?mode=signup')}
-            className="w-full sm:w-auto flex items-center justify-center gap-2 bg-white text-black text-sm font-bold px-8 py-4 rounded-xl hover:bg-zinc-200 transition cursor-pointer">
+          <Link href="/auth?mode=signup"
+            className="w-full sm:w-auto flex items-center justify-center gap-2 bg-white text-black text-sm font-bold px-8 py-4 rounded-xl hover:bg-zinc-200 transition">
             Start Free Trial
             <ArrowRight className="w-4 h-4 stroke-[2.5]" />
-          </button>
+          </Link>
           <a href="#features"
             className="w-full sm:w-auto flex items-center justify-center border border-zinc-800 bg-zinc-900/60 hover:bg-zinc-900 text-zinc-300 text-sm font-bold px-8 py-4 rounded-xl transition">
             See How It Works
           </a>
         </div>
 
-        <p className="text-xs text-zinc-600 font-medium">No credit card required to start · Cancel anytime</p>
+        <p className="text-xs text-zinc-600 font-medium">No credit card required · 14-day free trial · Cancel anytime</p>
 
         {/* Social proof numbers */}
         <div className="grid grid-cols-3 gap-4 max-w-lg mx-auto pt-4">
           {[
             { value: '< 5 min', label: 'To create first portal' },
-            { value: '0', label: 'Client login required' },
-            { value: '$0', label: 'Transaction fees' },
+            { value: '0', label: 'Client logins required' },
+            { value: '$0', label: 'Transaction fees ever' },
           ].map(({ value, label }) => (
             <div key={label} className="text-center">
               <p className="text-2xl font-black text-white">{value}</p>
@@ -174,10 +172,10 @@ export default function LandingPage() {
         <div className="max-w-4xl mx-auto px-6 py-16 text-center space-y-4">
           <p className="text-[10px] font-bold tracking-widest uppercase text-zinc-500">Sound familiar?</p>
           <h2 className="text-2xl sm:text-3xl font-black text-white tracking-tight max-w-2xl mx-auto">
-            You do great work. Your clients just can't see it.
+            You do great work. Your clients just can&apos;t see it.
           </h2>
           <p className="text-sm text-zinc-400 max-w-xl mx-auto leading-relaxed">
-            You're texting job photos from your personal phone. Sending invoices from Gmail. Answering "when will you be done?" three times a day. Chasing signatures on paper. There's a better way.
+            You&apos;re texting job photos from your personal phone. Sending invoices from Gmail. Answering &ldquo;when will you be done?&rdquo; three times a day. Chasing signatures on paper. There&apos;s a better way.
           </p>
         </div>
       </section>
@@ -218,10 +216,15 @@ export default function LandingPage() {
               Show your clients the transformation — not just the invoice.
             </h3>
             <p className="text-sm text-zinc-400 leading-relaxed">
-              Attach before and after photos to any job milestone. When your client opens their portal they see exactly what changed — documented, professional, and undeniable. No more "it doesn't look any different" disputes.
+              Attach before and after photos to any job milestone. When your client opens their portal they see exactly what changed — documented, professional, and undeniable. No more &ldquo;it doesn&apos;t look any different&rdquo; disputes.
             </p>
             <ul className="space-y-2">
-              {['Upload photos directly from your phone', 'Side-by-side comparison in the client portal', 'Permanently attached to the job record', 'Works for landscaping, pest control, HVAC, cleaning, and more'].map(item => (
+              {[
+                'Upload photos directly from your phone',
+                'Side-by-side comparison in the client portal',
+                'Permanently attached to the job record',
+                'Works for landscaping, pest control, HVAC, cleaning, and more',
+              ].map(item => (
                 <li key={item} className="flex items-start gap-2 text-xs text-zinc-300 font-medium">
                   <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
                   {item}
@@ -276,95 +279,40 @@ export default function LandingPage() {
           <p className="text-[10px] font-bold tracking-widest uppercase text-zinc-500">Pricing</p>
           <h2 className="text-2xl sm:text-3xl font-black text-white tracking-tight">One plan. Everything included.</h2>
           <p className="text-sm text-zinc-400 max-w-sm mx-auto">No tiers. No feature limits. No surprises.</p>
-
-          {/* Billing toggle */}
-          <div className="inline-flex items-center bg-zinc-900 border border-zinc-800 p-1 rounded-xl mt-2">
-            <button onClick={() => setBilling('monthly')}
-              className={`text-[10px] font-bold uppercase tracking-wider px-5 py-2 rounded-lg transition cursor-pointer ${billing === 'monthly' ? 'bg-zinc-800 text-white border border-zinc-700' : 'text-zinc-500 hover:text-zinc-300'}`}>
-              Monthly
-            </button>
-            <button onClick={() => setBilling('annual')}
-              className={`text-[10px] font-bold uppercase tracking-wider px-5 py-2 rounded-lg transition cursor-pointer ${billing === 'annual' ? 'bg-zinc-800 text-white border border-zinc-700' : 'text-zinc-500 hover:text-zinc-300'}`}>
-              Annual <span className="text-emerald-400 font-mono text-[9px] normal-case ml-1">2 months free</span>
-            </button>
-          </div>
         </div>
-
-        <div className="bg-zinc-900/50 border border-zinc-700 rounded-3xl p-8 md:p-10 shadow-2xl shadow-zinc-950/50 max-w-md mx-auto">
-          {billing === 'monthly' ? (
-            <div className="mb-2">
-              <div className="flex items-baseline gap-2">
-                <span className="text-5xl font-black text-white">$37</span>
-                <span className="text-sm text-zinc-500 font-medium">/ month</span>
-              </div>
-              <p className="text-xs text-zinc-500 mt-1">Unlimited everything · Cancel anytime</p>
-            </div>
-          ) : (
-            <div className="mb-2">
-              <div className="flex items-baseline gap-2">
-                <span className="text-5xl font-black text-white">$370</span>
-                <span className="text-sm text-zinc-500 font-medium">/ year</span>
-              </div>
-              <div className="flex items-center gap-2 mt-1">
-                <span className="text-sm text-emerald-400 font-bold">$30.83/month effective</span>
-                <span className="text-xs text-zinc-600 line-through">$444/yr</span>
-                <span className="text-[10px] font-black text-emerald-500 bg-emerald-950/50 border border-emerald-900 px-2 py-0.5 rounded-full">Save $148</span>
-              </div>
-              <p className="text-xs text-zinc-500 mt-1">Billed annually · Cancel anytime</p>
-            </div>
-          )}
-
-          <ul className="space-y-3 mb-8 mt-6">
-            {[
-              'Unlimited client portals',
-              'Magic link client access — no login required',
-              'Before & after photo milestones',
-              'Proposals with digital signature',
-              'Itemized invoices & PDF receipts',
-              'Real-time client messaging',
-              'File delivery & document vault',
-              'White-label with your brand & logo',
-              'Automated client & admin notifications',
-              'Team member access with roles',
-              'Payment link integration — zero transaction fees',
-              'Milestone templates',
-              'Activity feed per project',
-            ].map(feat => (
-              <li key={feat} className="flex items-start gap-2.5 text-sm font-medium text-zinc-300">
-                <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
-                {feat}
-              </li>
-            ))}
-          </ul>
-
-          <button onClick={() => router.push('/auth?mode=signup')}
-            className="w-full bg-white text-black py-4 rounded-xl font-bold text-sm hover:bg-zinc-200 transition cursor-pointer flex items-center justify-center gap-2">
-            Start Free Trial
-            <ArrowRight className="w-4 h-4" />
-          </button>
-          <p className="text-center text-xs text-zinc-600 mt-3">14 days free · No credit card required</p>
-        </div>
+        <PricingToggle />
       </section>
 
-      {/* ── TESTIMONIALS (placeholder) ───────────────────────────── */}
+      {/* ── WHY NOT JOBBER ──────────────────────────────────────── */}
       <section className="relative z-10 border-t border-zinc-900/60 bg-zinc-900/10">
-        <div className="max-w-5xl mx-auto px-6 py-20">
+        <div className="max-w-4xl mx-auto px-6 py-20">
           <div className="text-center space-y-3 mb-12">
-            <p className="text-[10px] font-bold tracking-widest uppercase text-zinc-500">From the field</p>
-            <h2 className="text-2xl font-black text-white tracking-tight">Built for operators, tested in the field.</h2>
+            <p className="text-[10px] font-bold tracking-widest uppercase text-zinc-500">How we&apos;re different</p>
+            <h2 className="text-2xl font-black text-white tracking-tight">Jobber runs your operations. OpenBillet impresses your clients.</h2>
+            <p className="text-sm text-zinc-400 max-w-xl mx-auto leading-relaxed">
+              Tools like Jobber and Housecall Pro are built for internal scheduling and dispatch. OpenBillet is built for the experience your client actually sees — and remembers.
+            </p>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-            {testimonialPlaceholders.map((t, i) => (
-              <div key={i} className="bg-zinc-900/40 border border-zinc-800 rounded-2xl p-6 space-y-4">
-                <div className="flex gap-0.5">
-                  {[...Array(5)].map((_, s) => (
-                    <Star key={s} className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />
-                  ))}
-                </div>
-                <p className="text-sm text-zinc-300 leading-relaxed italic">"{t.quote}"</p>
-                <div>
-                  <p className="text-xs font-bold text-zinc-200">{t.name}</p>
-                  <p className="text-[10px] text-zinc-500">{t.location}</p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-2xl mx-auto">
+            {[
+              { label: 'Magic-link portal (no client login)', ob: true, jobber: false },
+              { label: 'Before & after photo milestones', ob: true, jobber: false },
+              { label: 'White-labeled to your brand', ob: true, jobber: false },
+              { label: 'Zero transaction fees on payments', ob: true, jobber: false },
+              { label: 'Proposals with digital signature', ob: true, jobber: true },
+              { label: 'Real-time client messaging', ob: true, jobber: true },
+              { label: 'File delivery & document vault', ob: true, jobber: true },
+              { label: 'Field worker job assignment', ob: true, jobber: true },
+            ].map(({ label, ob, jobber }) => (
+              <div key={label} className="flex items-center justify-between gap-4 p-3 bg-zinc-900/30 border border-zinc-800 rounded-xl text-xs">
+                <span className="text-zinc-300 font-medium">{label}</span>
+                <div className="flex items-center gap-3 shrink-0">
+                  <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full ${ob ? 'bg-emerald-950 text-emerald-400 border border-emerald-900' : 'bg-zinc-900 text-zinc-600 border border-zinc-800'}`}>
+                    OB {ob ? '✓' : '✗'}
+                  </span>
+                  <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full ${jobber ? 'bg-zinc-800 text-zinc-400 border border-zinc-700' : 'bg-zinc-900 text-zinc-600 border border-zinc-800'}`}>
+                    Others {jobber ? '✓' : '✗'}
+                  </span>
                 </div>
               </div>
             ))}
@@ -378,20 +326,7 @@ export default function LandingPage() {
           <p className="text-[10px] font-bold tracking-widest uppercase text-zinc-500">FAQ</p>
           <h2 className="text-2xl font-black text-white tracking-tight">Common questions.</h2>
         </div>
-        <div className="space-y-3">
-          {faqs.map((faq, i) => (
-            <div key={i} className="bg-zinc-900/20 border border-zinc-900 rounded-2xl overflow-hidden hover:border-zinc-800 transition">
-              <button onClick={() => setActiveFaq(activeFaq === i ? null : i)}
-                className="w-full flex items-center justify-between p-5 text-left text-sm font-bold text-zinc-200 hover:text-white transition focus:outline-none cursor-pointer">
-                <span>{faq.q}</span>
-                <ChevronDown className={`w-4 h-4 text-zinc-500 shrink-0 ml-4 transition-transform duration-300 ${activeFaq === i ? 'rotate-180 text-white' : ''}`} />
-              </button>
-              <div className={`transition-all duration-300 ease-in-out overflow-hidden ${activeFaq === i ? 'max-h-48 border-t border-zinc-900' : 'max-h-0'}`}>
-                <p className="p-5 text-sm text-zinc-400 leading-relaxed">{faq.a}</p>
-              </div>
-            </div>
-          ))}
-        </div>
+        <FaqAccordion faqs={faqs} />
       </section>
 
       {/* ── FINAL CTA ───────────────────────────────────────────── */}
@@ -403,12 +338,12 @@ export default function LandingPage() {
           <p className="text-sm text-zinc-400 max-w-lg mx-auto leading-relaxed">
             Set up your first client portal in under 5 minutes. No training required. No complicated setup. Just a clean, professional workspace your clients will actually use.
           </p>
-          <button onClick={() => router.push('/auth?mode=signup')}
-            className="inline-flex items-center gap-2 bg-white text-black text-sm font-bold px-8 py-4 rounded-xl hover:bg-zinc-200 transition cursor-pointer">
+          <Link href="/auth?mode=signup"
+            className="inline-flex items-center gap-2 bg-white text-black text-sm font-bold px-8 py-4 rounded-xl hover:bg-zinc-200 transition">
             Get Started Free
             <ArrowRight className="w-4 h-4 stroke-[2.5]" />
-          </button>
-          <p className="text-xs text-zinc-600">$74/month after trial · No contracts · Cancel anytime</p>
+          </Link>
+          <p className="text-xs text-zinc-600">$37/month after trial · No contracts · Cancel anytime</p>
         </div>
       </section>
 
