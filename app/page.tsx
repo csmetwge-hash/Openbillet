@@ -294,7 +294,7 @@ export default function LandingPage() {
           {billing === 'monthly' ? (
             <div className="mb-2">
               <div className="flex items-baseline gap-2">
-                <span className="text-5xl font-black text-white">$74</span>
+                <span className="text-5xl font-black text-white">$37</span>
                 <span className="text-sm text-zinc-500 font-medium">/ month</span>
               </div>
               <p className="text-xs text-zinc-500 mt-1">Unlimited everything · Cancel anytime</p>
@@ -302,12 +302,12 @@ export default function LandingPage() {
           ) : (
             <div className="mb-2">
               <div className="flex items-baseline gap-2">
-                <span className="text-5xl font-black text-white">$740</span>
+                <span className="text-5xl font-black text-white">$370</span>
                 <span className="text-sm text-zinc-500 font-medium">/ year</span>
               </div>
               <div className="flex items-center gap-2 mt-1">
-                <span className="text-sm text-emerald-400 font-bold">$62/month effective</span>
-                <span className="text-xs text-zinc-600 line-through">$888/yr</span>
+                <span className="text-sm text-emerald-400 font-bold">$30.83/month effective</span>
+                <span className="text-xs text-zinc-600 line-through">$444/yr</span>
                 <span className="text-[10px] font-black text-emerald-500 bg-emerald-950/50 border border-emerald-900 px-2 py-0.5 rounded-full">Save $148</span>
               </div>
               <p className="text-xs text-zinc-500 mt-1">Billed annually · Cancel anytime</p>
