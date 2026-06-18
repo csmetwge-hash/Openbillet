@@ -46,7 +46,7 @@ export async function POST(req: Request) {
     // Verify this job is actually assigned to this worker
     const { data: milestone, error: msErr } = await supabaseAdmin
       .from('portal_milestones')
-      .select('id, title, payment_request, assigned_worker_id, portal_id, client_portals(client_name, project_name, user_id)')
+      .select('id, title, payment_request, payment_link, assigned_worker_id, portal_id, client_portals(client_name, project_name, user_id)')
       .eq('id', milestoneId)
       .maybeSingle();
 
@@ -64,7 +64,9 @@ export async function POST(req: Request) {
     let notifyType: string | null = null;
 
     if (action === 'complete') {
-      const hasOnlinePaymentLink = !!milestone.payment_request && milestone.payment_request.includes('http');
+      const hasOnlinePaymentLink = 
+        (!!milestone.payment_request && milestone.payment_request.includes('http')) ||
+        (!!milestone.payment_link && milestone.payment_link.includes('http'));
       update = { worker_status: 'completed', worker_note: null };
       if (!hasOnlinePaymentLink) {
         update.status = 'completed';
