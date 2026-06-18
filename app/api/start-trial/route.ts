@@ -24,6 +24,18 @@ export async function POST() {
       return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 });
     }
 
+    // Skip trial creation for team members / workers — they don't need a subscription record
+    const { data: membership } = await supabaseAdmin
+      .from('team_members')
+      .select('id, role')
+      .eq('member_user_id', user.id)
+      .eq('status', 'active')
+      .maybeSingle();
+
+    if (membership) {
+      return NextResponse.json({ success: true, skipped: true });
+    }
+
     // Check if they already have a subscription record
     const { data: existing } = await supabaseAdmin
       .from('manager_subscriptions')
