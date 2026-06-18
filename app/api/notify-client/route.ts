@@ -68,7 +68,7 @@ export async function POST(req: Request) {
     `;
 
     await resend.emails.send({
-      from: 'OpenBillet <onboarding@resend.dev>',
+      from: 'OpenBillet Notifications <notifications@openbillet.com>',
       to: portal.client_email,
       subject,
       html: emailHtml,

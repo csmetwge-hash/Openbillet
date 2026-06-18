@@ -7,23 +7,6 @@ import InstallPrompt from '@/components/InstallPrompt';
 export const metadata: Metadata = {
   title: 'OpenBillet — Premium Client Portals',
   description: 'Deploy secure client workspaces with milestone tracking, file delivery, proposals, and automated updates.',
-  manifest: '/manifest.json',
-  appleWebApp: {
-    capable: true,
-    statusBarStyle: 'default',
-    title: 'OpenBillet',
-  },
-  icons: {
-    icon: '/icon-512.png',
-    apple: '/apple-touch-icon.png',
-  },
-};
-
-export const viewport: Viewport = {
-  themeColor: '#18181b',
-  width: 'device-width',
-  initialScale: 1,
-  viewportFit: 'cover',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
