@@ -9,6 +9,7 @@ import {
   User, Phone, MapPin, Tag, FileText, Edit3,
   Copy, Check, X, Lock, Share2, Archive, RotateCcw,
   Activity, Camera, BookTemplate, ChevronDown, Image,
+  Calendar, AlertTriangle,
 } from 'lucide-react';
 import { resolveWorkspaceAccess } from '@/lib/workspace';
 
@@ -20,10 +21,13 @@ interface MilestoneForm {
   amount: string;
   payment_link: string;
   responsibility: string;
+  scheduled_at: string;
+  assigned_worker_id: string;
 }
 
 const emptyForm: MilestoneForm = {
   title: '', description: '', amount: '', payment_link: '', responsibility: 'provider',
+  scheduled_at: '', assigned_worker_id: '',
 };
 
 export default function AdminPortalWorkspace({ params }: { params: Promise<{ id: string }> }) {
@@ -39,7 +43,7 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
   const [activeTab, setActiveTab] = useState<Tab>('milestones');
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState(false);
-  const [userRole, setUserRole] = useState<'owner' | 'admin' | 'user' | null>(null);
+  const [userRole, setUserRole] = useState<'owner' | 'admin' | 'user' | 'worker' | null>(null);
   const [archiving, setArchiving] = useState(false);
 
   const pageTopRef = useRef<HTMLDivElement>(null);
@@ -49,6 +53,14 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
   const [showMilestoneForm, setShowMilestoneForm] = useState(false);
   const [editingMilestoneId, setEditingMilestoneId] = useState<string | null>(null);
   const [milestoneForm, setMilestoneForm] = useState<MilestoneForm>(emptyForm);
+
+  // Workers
+  const [workers, setWorkers] = useState<{ id: string; member_email: string }[]>([]);
+
+  // Reschedule
+  const [reschedulingId, setReschedulingId] = useState<string | null>(null);
+  const [rescheduleDate, setRescheduleDate] = useState('');
+  const [reschedulingSaving, setReschedulingSaving] = useState(false);
 
   // Templates
   const [templates, setTemplates] = useState<any[]>([]);
@@ -100,6 +112,7 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
 
   const fetchAll = async () => {
     const { ownerId, role } = await resolveWorkspaceAccess();
+    if (role === 'worker') { router.push('/worker'); return; }
     if (!ownerId) { router.push('/auth'); return; }
     setUserRole(role);
 
@@ -115,13 +128,14 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
       notes: portalData.notes || '',
     });
 
-    const [ms, fs, ns, ps, ac, tmpl] = await Promise.all([
+    const [ms, fs, ns, ps, ac, tmpl, wk] = await Promise.all([
       supabase.from('portal_milestones').select('*').eq('portal_id', portalData.id).order('created_at', { ascending: true }),
       supabase.from('portal_files').select('*').eq('portal_id', portalData.id).order('created_at', { ascending: false }),
       supabase.from('portal_notes').select('*').eq('portal_id', portalData.id).order('created_at', { ascending: true }),
       supabase.from('portal_proposals').select('*, proposal_line_items(*)').eq('portal_id', portalData.id).order('created_at', { ascending: false }),
       supabase.from('portal_activity').select('*').eq('portal_id', portalData.id).order('created_at', { ascending: false }),
       supabase.from('milestone_templates').select('*').eq('user_id', ownerId).order('created_at', { ascending: false }),
+      supabase.from('team_members').select('id, member_email').eq('owner_user_id', ownerId).eq('role', 'worker').eq('status', 'active'),
     ]);
 
     setMilestones(ms.data || []);
@@ -130,6 +144,7 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
     setProposals((ps.data || []).map((p: any) => ({ ...p, line_items: p.proposal_line_items || [] })));
     setActivity(ac.data || []);
     setTemplates(tmpl.data || []);
+    setWorkers(wk.data || []);
     setLoading(false);
   };
 
@@ -191,7 +206,7 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
     });
     if (res.ok) {
       if (action === 'archive') {
-        router.push('/dashboard');
+        router.push('/admin');
       } else {
         setPortal((prev: any) => ({ ...prev, status: 'active' }));
       }
@@ -218,6 +233,8 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
       title: m.title || '', description: m.description || '',
       amount: m.amount || '', payment_link: m.payment_link || '',
       responsibility: m.responsibility || 'provider',
+      scheduled_at: m.scheduled_at ? new Date(m.scheduled_at).toISOString().slice(0, 16) : '',
+      assigned_worker_id: m.assigned_worker_id || '',
     });
     setShowMilestoneForm(true);
     pageTopRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -230,6 +247,8 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
       title: milestoneForm.title, description: milestoneForm.description || null,
       amount: milestoneForm.amount || null, payment_link: milestoneForm.payment_link || null,
       responsibility: milestoneForm.responsibility,
+      scheduled_at: milestoneForm.scheduled_at ? new Date(milestoneForm.scheduled_at).toISOString() : null,
+      assigned_worker_id: milestoneForm.assigned_worker_id || null,
     };
     if (editingMilestoneId) {
       await supabase.from('portal_milestones').update(payload).eq('id', editingMilestoneId);
@@ -262,6 +281,46 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
     if (!confirm('Delete this milestone?')) return;
     await supabase.from('portal_milestones').delete().eq('id', id);
     setMilestones(prev => prev.filter(m => m.id !== id));
+  };
+
+  const handleReschedule = async (milestone: any) => {
+    if (!rescheduleDate || isReadOnly) return;
+    setReschedulingSaving(true);
+    const newScheduledAt = new Date(rescheduleDate).toISOString();
+
+    await supabase.from('portal_milestones').update({
+      scheduled_at: newScheduledAt,
+      worker_status: null,
+      worker_note: null,
+    }).eq('id', milestone.id);
+
+    setMilestones(prev => prev.map(m => m.id === milestone.id
+      ? { ...m, scheduled_at: newScheduledAt, worker_status: null, worker_note: null }
+      : m
+    ));
+
+    const worker = workers.find(w => w.id === milestone.assigned_worker_id);
+    if (worker?.member_email) {
+      try {
+        await fetch('/api/notify-worker', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            workerEmail: worker.member_email,
+            jobTitle: milestone.title,
+            scheduledAt: newScheduledAt,
+            clientName: portal?.client_name,
+            projectName: portal?.project_name,
+          }),
+        });
+      } catch (err) { console.error('Worker notify failed:', err); }
+    }
+
+    await logActivity('milestone_rescheduled', `Rescheduled "${milestone.title}" to ${new Date(newScheduledAt).toLocaleString()}`);
+
+    setReschedulingId(null);
+    setRescheduleDate('');
+    setReschedulingSaving(false);
   };
 
   // ── Photo upload ─────────────────────────────────────────
@@ -671,6 +730,22 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
                     <option value="client">Customer responsibility</option>
                   </select>
                 </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-1">Scheduled Date/Time <span className="text-zinc-300">optional</span></label>
+                    <input type="datetime-local"
+                      value={milestoneForm.scheduled_at} onChange={e => updateForm('scheduled_at', e.target.value)}
+                      className="w-full border border-zinc-200 rounded-xl px-3 py-3 text-sm focus:outline-none focus:border-zinc-900 transition" />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-1">Assigned To</label>
+                    <select value={milestoneForm.assigned_worker_id} onChange={e => updateForm('assigned_worker_id', e.target.value)}
+                      className="w-full border border-zinc-200 rounded-xl px-3 py-3 text-sm bg-white font-medium text-zinc-700 focus:outline-none">
+                      <option value="">Myself / Unassigned</option>
+                      {workers.map(w => <option key={w.id} value={w.id}>{w.member_email}</option>)}
+                    </select>
+                  </div>
+                </div>
                 <div className="flex gap-2 pt-1">
                   <button onClick={saveMilestone as any} disabled={!milestoneForm.title.trim()}
                     className="flex-1 bg-zinc-900 text-white py-3 rounded-xl text-sm font-bold hover:bg-zinc-700 transition cursor-pointer disabled:opacity-40">
@@ -716,7 +791,49 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
                         }`}>{m.status.replace('_', ' ')}</span>
                         <span className="text-[10px] text-zinc-400">{m.responsibility === 'client' ? 'Customer' : 'You'}</span>
                         {m.amount && <span className="text-[10px] font-bold text-zinc-600">{m.amount}</span>}
+                        {m.scheduled_at && (
+                          <span className="text-[10px] text-zinc-400 flex items-center gap-1">
+                            <Calendar className="w-3 h-3" />
+                            {new Date(m.scheduled_at).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
+                          </span>
+                        )}
+                        {m.assigned_worker_id && (
+                          <span className="text-[10px] text-zinc-400 flex items-center gap-1">
+                            <User className="w-3 h-3" />
+                            {workers.find(w => w.id === m.assigned_worker_id)?.member_email || 'Assigned'}
+                          </span>
+                        )}
                       </div>
+                      {(m.worker_status === 'no_show' || m.worker_status === 'issue_reported') && (
+                        <div className="mt-2 text-[11px] font-medium text-amber-700 bg-amber-50 border border-amber-200 px-2.5 py-1.5 rounded-lg space-y-2">
+                          <div className="flex items-start gap-1.5">
+                            <AlertTriangle className="w-3 h-3 mt-0.5 shrink-0" />
+                            {m.worker_status === 'no_show' ? 'Worker reported a no-show' : 'Worker requested a reschedule'}
+                            {m.worker_note ? ` — ${m.worker_note}` : ''}
+                          </div>
+                          {!isReadOnly && (
+                            reschedulingId === m.id ? (
+                              <div className="flex items-center gap-2 pt-1">
+                                <input type="datetime-local" value={rescheduleDate} onChange={e => setRescheduleDate(e.target.value)}
+                                  className="flex-1 border border-amber-300 rounded-lg px-2 py-1.5 text-xs bg-white focus:outline-none [color-scheme:light]" />
+                                <button onClick={() => handleReschedule(m)} disabled={!rescheduleDate || reschedulingSaving}
+                                  className="bg-zinc-900 text-white px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider disabled:opacity-40 cursor-pointer">
+                                  {reschedulingSaving ? 'Saving...' : 'Confirm'}
+                                </button>
+                                <button onClick={() => { setReschedulingId(null); setRescheduleDate(''); }}
+                                  className="text-zinc-400 hover:text-zinc-600 px-1 cursor-pointer">
+                                  <X className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            ) : (
+                              <button onClick={() => setReschedulingId(m.id)}
+                                className="text-[10px] font-bold uppercase tracking-wider underline cursor-pointer">
+                                Set new time
+                              </button>
+                            )
+                          )}
+                        </div>
+                      )}
                     </div>
                     {!isReadOnly && (
                       <div className="flex items-center gap-1 shrink-0">

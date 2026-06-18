@@ -24,6 +24,18 @@ export async function POST() {
       return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 });
     }
 
+    // Skip trial creation for team members / workers — they don't need a subscription record
+    const { data: membership } = await supabaseAdmin
+      .from('team_members')
+      .select('id, role')
+      .eq('member_user_id', user.id)
+      .eq('status', 'active')
+      .maybeSingle();
+
+    if (membership) {
+      return NextResponse.json({ success: true, skipped: true });
+    }
+
     // Check if they already have a subscription record
     const { data: existing } = await supabaseAdmin
       .from('manager_subscriptions')
@@ -52,7 +64,14 @@ export async function POST() {
         updated_at: new Date().toISOString(),
       });
 
-    if (error) throw error;
+    if (error) {
+      // Race condition: another concurrent call already created this record.
+      // That's fine — the trial record exists either way.
+      if (error.code === '23505') {
+        return NextResponse.json({ success: true, alreadyExists: true });
+      }
+      throw error;
+    }
 
     return NextResponse.json({ success: true, trialEnds: trialEnds.toISOString() });
 

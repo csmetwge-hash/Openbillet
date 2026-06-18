@@ -5,7 +5,7 @@ import { supabase } from '@/lib/supabase';
 import { useRouter } from 'next/navigation';
 import {
   ArrowLeft, Upload, Save, UserPlus, Trash2, Mail,
-  CheckCircle2, AlertCircle, Crown, Shield, Eye,
+  CheckCircle2, AlertCircle, Crown, Shield, Eye, Wrench,
 } from 'lucide-react';
 
 export default function SettingsPage() {
@@ -24,7 +24,7 @@ export default function SettingsPage() {
   // Team
   const [teamMembers, setTeamMembers] = useState<any[]>([]);
   const [inviteEmail, setInviteEmail] = useState('');
-  const [inviteRole, setInviteRole] = useState<'admin' | 'user'>('user');
+  const [inviteRole, setInviteRole] = useState<'admin' | 'user' | 'worker'>('user');
   const [inviting, setInviting] = useState(false);
   const [inviteMsg, setInviteMsg] = useState('');
   const [inviteError, setInviteError] = useState('');
@@ -118,8 +118,16 @@ export default function SettingsPage() {
     setTeamMembers(prev => prev.filter(m => m.id !== id));
   };
 
+  const updateMemberRole = async (id: string, newRole: string) => {
+    const { error } = await supabase.from('team_members').update({ role: newRole }).eq('id', id);
+    if (!error) {
+      setTeamMembers(prev => prev.map(m => m.id === id ? { ...m, role: newRole } : m));
+    }
+  };
+
   const getRoleIcon = (role: string) => {
     if (role === 'admin') return <Shield className="w-3.5 h-3.5 text-zinc-500" />;
+    if (role === 'worker') return <Wrench className="w-3.5 h-3.5 text-zinc-500" />;
     return <Eye className="w-3.5 h-3.5 text-zinc-400" />;
   };
 
@@ -226,14 +234,15 @@ export default function SettingsPage() {
 
           {/* Invite form */}
           <form onSubmit={sendInvite} className="space-y-3">
-            <div className="flex gap-2">
+            <div className="flex gap-2 flex-wrap">
               <input type="email" required value={inviteEmail} onChange={e => setInviteEmail(e.target.value)}
                 placeholder="colleague@company.com"
-                className="flex-1 border border-zinc-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-zinc-900 transition" />
-              <select value={inviteRole} onChange={e => setInviteRole(e.target.value as 'admin' | 'user')}
-                className="border border-zinc-200 rounded-xl px-3 py-3 text-sm bg-white font-medium text-zinc-700 focus:outline-none shrink-0">
+                className="flex-1 min-w-0 border border-zinc-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-zinc-900 transition" />
+              <select value={inviteRole} onChange={e => setInviteRole(e.target.value as 'admin' | 'user' | 'worker')}
+                className="border border-zinc-200 rounded-xl px-3 py-3 text-sm bg-white font-medium text-zinc-700 focus:outline-none w-28 shrink-0">
                 <option value="user">Viewer</option>
                 <option value="admin">Admin</option>
+                <option value="worker">Worker</option>
               </select>
             </div>
             <button type="submit" disabled={inviting || !inviteEmail.trim()}
@@ -254,7 +263,7 @@ export default function SettingsPage() {
           </form>
 
           {/* Role legend */}
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-3 gap-2">
             <div className="bg-zinc-50 rounded-xl p-3 space-y-1">
               <div className="flex items-center gap-1.5">
                 <Shield className="w-3.5 h-3.5 text-zinc-600" />
@@ -268,6 +277,13 @@ export default function SettingsPage() {
                 <span className="text-xs font-bold text-zinc-700">Viewer</span>
               </div>
               <p className="text-[10px] text-zinc-500">Read-only access, cannot make changes</p>
+            </div>
+            <div className="bg-zinc-50 rounded-xl p-3 space-y-1">
+              <div className="flex items-center gap-1.5">
+                <Wrench className="w-3.5 h-3.5 text-zinc-500" />
+                <span className="text-xs font-bold text-zinc-700">Field Worker</span>
+              </div>
+              <p className="text-[10px] text-zinc-500">Sees only their assigned jobs &amp; schedule</p>
             </div>
           </div>
 
@@ -287,16 +303,24 @@ export default function SettingsPage() {
             </div>
 
             {teamMembers.map(member => (
-              <div key={member.id} className="flex items-center justify-between p-3 border border-zinc-100 rounded-xl">
-                <div className="flex items-center gap-2.5 min-w-0">
-                  <div className="p-1.5 bg-zinc-100 rounded-lg shrink-0">
+              <div key={member.id} className="flex items-start justify-between gap-2 p-3 border border-zinc-100 rounded-xl">
+                <div className="flex items-start gap-2.5 min-w-0 flex-1">
+                  <div className="p-1.5 bg-zinc-100 rounded-lg shrink-0 mt-0.5">
                     {getRoleIcon(member.role)}
                   </div>
-                  <div className="min-w-0">
+                  <div className="min-w-0 flex-1">
                     <p className="text-xs font-semibold text-zinc-900 truncate">{member.member_email}</p>
-                    <div className="flex items-center gap-2">
-                      <span className="text-[10px] text-zinc-400 capitalize">{member.role}</span>
-                      <span className={`text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded ${
+                    <div className="flex items-center gap-2 mt-1 flex-wrap">
+                      <select
+                        value={member.role}
+                        onChange={(e) => updateMemberRole(member.id, e.target.value)}
+                        className="text-[10px] border border-zinc-200 rounded px-1.5 py-1 bg-white text-zinc-600 focus:outline-none cursor-pointer w-20 shrink-0"
+                      >
+                        <option value="user">Viewer</option>
+                        <option value="admin">Admin</option>
+                        <option value="worker">Worker</option>
+                      </select>
+                      <span className={`text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded shrink-0 ${
                         member.status === 'active' ? 'bg-emerald-50 text-emerald-600' : 'bg-amber-50 text-amber-600'
                       }`}>
                         {member.status === 'active' ? 'Active' : 'Invited'}

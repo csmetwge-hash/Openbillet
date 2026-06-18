@@ -6,7 +6,7 @@ import { supabase } from '@/lib/supabase';
 import {
   CheckCircle2, Circle, Clock, Send, Download, ExternalLink,
   MessageSquare, Layers, FolderOpen, ClipboardList, Paperclip,
-  X, FileText,
+  X, FileText, ArrowLeft,
 } from 'lucide-react';
 
 interface Portal {
@@ -89,6 +89,15 @@ export default function ClientPortal({ params }: { params: Promise<{ token: stri
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => { fetchPortal(); }, [token]);
+
+  useEffect(() => {
+    // Only show a back button if there's somewhere to go back to within
+    // the app (e.g. navigated here from /admin). A client opening a fresh
+    // magic-link won't have prior history, so no back button for them.
+    if (typeof window !== 'undefined' && window.history.length > 1) {
+      setCanGoBack(true);
+    }
+  }, []);
 
   useEffect(() => {
     if (!portal) return;

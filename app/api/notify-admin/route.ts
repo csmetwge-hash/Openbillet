@@ -31,12 +31,16 @@ export async function POST(req: Request) {
       message: `💬 New message from ${clientName}`,
       proposal_accepted: `✅ Proposal accepted by ${clientName}`,
       proposal_declined: `❌ Proposal declined by ${clientName}`,
+      job_no_show: `🚫 Worker reported a no-show — ${projectName}`,
+      job_reschedule_requested: `🔄 Worker requested a reschedule — ${projectName}`,
     };
 
     const actionLines: Record<string, string> = {
       message: `${clientName} sent you a new message on <strong>${projectName}</strong>:`,
       proposal_accepted: `${clientName} has <strong>accepted</strong> your proposal on <strong>${projectName}</strong>.`,
       proposal_declined: `${clientName} has <strong>declined</strong> your proposal on <strong>${projectName}</strong>.`,
+      job_no_show: `A scheduled job on <strong>${projectName}</strong> was marked as a <strong>no-show</strong> by the assigned worker.`,
+      job_reschedule_requested: `The assigned worker has requested a <strong>reschedule</strong> for a job on <strong>${projectName}</strong>.`,
     };
 
     const emailHtml = `
