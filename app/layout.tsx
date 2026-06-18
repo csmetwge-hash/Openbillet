@@ -1,6 +1,8 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import './globals.css';
 import { SupabaseAuthProvider } from '@/components/SupabaseAuth';
+import ServiceWorkerRegister from '@/components/ServiceWorkerRegister';
+import InstallPrompt from '@/components/InstallPrompt';
 
 export const metadata: Metadata = {
   title: 'OpenBillet — Premium Client Portals',
@@ -18,6 +20,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         suppressHydrationWarning
       >
         <SupabaseAuthProvider>{children}</SupabaseAuthProvider>
+        <ServiceWorkerRegister />
+        <InstallPrompt />
       </body>
     </html>
   );

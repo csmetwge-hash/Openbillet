@@ -72,13 +72,13 @@ export default function BillingPage() {
   const isActive = status === 'active';
 
   return (
-    <div className="min-h-screen bg-zinc-900 text-zinc-100 py-12 px-6 relative">
-      <div className="absolute inset-0 bg-[linear-gradient(to_right,#27272a_1px,transparent_1px),linear-gradient(to_bottom,#27272a_1px,transparent_1px)] bg-[size:4rem_4rem] opacity-20 pointer-events-none" />
+    <div className="min-h-screen bg-zinc-50 text-zinc-900 py-12 px-6">
+      <div className="max-w-md w-full mx-auto space-y-8">
 
       <div className="max-w-md w-full mx-auto space-y-8 relative z-10">
 
         <div className="flex items-center justify-between">
-          <Link href="/dashboard" className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-zinc-400 hover:text-white transition">
+          <Link href="/admin" className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-zinc-400 hover:text-zinc-900 transition">
             <ArrowLeft className="w-3.5 h-3.5" /> Dashboard
           </Link>
           {isActive && (
@@ -96,7 +96,7 @@ export default function BillingPage() {
         </div>
 
         {isActive ? (
-          <div className="flex items-center gap-3 bg-emerald-950/40 border border-emerald-800/50 text-emerald-400 p-4 rounded-xl text-xs font-semibold">
+          <div className="flex items-center gap-3 bg-emerald-50 border border-emerald-200 text-emerald-700 p-4 rounded-2xl text-xs font-semibold">
             <CheckCircle2 className="w-4 h-4 shrink-0" />
             <span>
               Active — Unlimited everything.{' '}

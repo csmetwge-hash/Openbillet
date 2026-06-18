@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, use, useRef } from 'react';
+import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import {
   CheckCircle2, Circle, Clock, Send, Download, ExternalLink,
@@ -66,6 +67,8 @@ type Tab = 'overview' | 'files' | 'messages' | 'proposals';
 
 export default function ClientPortal({ params }: { params: Promise<{ token: string }> }) {
   const { token } = use(params);
+  const router = useRouter();
+  const [canGoBack, setCanGoBack] = useState(false);
   const [portal, setPortal] = useState<Portal | null>(null);
   const [milestones, setMilestones] = useState<Milestone[]>([]);
   const [files, setFiles] = useState<PortalFile[]>([]);
@@ -215,8 +218,14 @@ export default function ClientPortal({ params }: { params: Promise<{ token: stri
 
       {/* Header */}
       <div className="bg-white border-b border-zinc-200 sticky top-0 z-40">
-        <div className="max-w-2xl mx-auto px-4 py-4 flex items-center justify-between">
+        <div className="max-w-2xl mx-auto px-4 py-4 flex items-center justify-between gap-2">
           <div className="flex items-center gap-3 min-w-0">
+            {canGoBack && (
+              <button onClick={() => router.back()}
+                className="p-2 -ml-1 bg-zinc-100 rounded-xl hover:bg-zinc-200 transition cursor-pointer shrink-0">
+                <ArrowLeft className="w-4 h-4 text-zinc-600" />
+              </button>
+            )}
             {portal!.brand_logo_url ? (
               <img src={portal!.brand_logo_url} alt={brandName} className="h-8 w-8 rounded-lg object-cover shrink-0" />
             ) : (

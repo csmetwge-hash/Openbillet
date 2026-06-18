@@ -84,11 +84,11 @@ export default function PricingPage() {
           <p className="text-sm text-zinc-400 max-w-sm mx-auto">No tiers, no feature limits, no surprises.</p>
 
           {/* Billing toggle */}
-          <div className="inline-flex items-center bg-zinc-900 border border-zinc-800 p-1 rounded-xl mt-2">
+          <div className="inline-flex items-center bg-white border border-zinc-200 p-1 rounded-xl mt-2">
             <button
               onClick={() => setBilling('monthly')}
               className={`text-[10px] font-bold uppercase tracking-wider px-5 py-2 rounded-lg transition cursor-pointer ${
-                billing === 'monthly' ? 'bg-zinc-800 text-white border border-zinc-700' : 'text-zinc-500 hover:text-zinc-300'
+                billing === 'monthly' ? 'bg-zinc-900 text-white' : 'text-zinc-400 hover:text-zinc-700'
               }`}
             >
               Monthly
@@ -96,10 +96,10 @@ export default function PricingPage() {
             <button
               onClick={() => setBilling('annual')}
               className={`text-[10px] font-bold uppercase tracking-wider px-5 py-2 rounded-lg transition cursor-pointer ${
-                billing === 'annual' ? 'bg-zinc-800 text-white border border-zinc-700' : 'text-zinc-500 hover:text-zinc-300'
+                billing === 'annual' ? 'bg-zinc-900 text-white' : 'text-zinc-400 hover:text-zinc-700'
               }`}
             >
-              Annual <span className="text-emerald-400 font-mono text-[9px] normal-case ml-1">2 months free</span>
+              Annual <span className="text-emerald-500 font-mono text-[9px] normal-case ml-1">2 months free</span>
             </button>
           </div>
         </div>

@@ -106,7 +106,7 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
     const { data: portalData, error } = await supabase
       .from('client_portals').select('*').eq('id', portalId).eq('user_id', ownerId).single();
 
-    if (error || !portalData) { router.push('/dashboard'); return; }
+    if (error || !portalData) { router.push('/admin'); return; }
     setPortal(portalData);
     setCrmFields({
       client_phone: portalData.client_phone || '',
@@ -510,7 +510,7 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
       <div className="bg-white border-b border-zinc-200 sticky top-0 z-40">
         <div className="max-w-4xl mx-auto px-4 py-4 flex items-center justify-between gap-3">
           <div className="flex items-center gap-3 min-w-0">
-            <button onClick={() => router.push('/dashboard')} className="p-2 bg-zinc-100 rounded-xl hover:bg-zinc-200 transition cursor-pointer shrink-0">
+            <button onClick={() => router.push('/admin')} className="p-2 bg-zinc-100 rounded-xl hover:bg-zinc-200 transition cursor-pointer shrink-0">
               <ArrowLeft className="w-4 h-4 text-zinc-600" />
             </button>
             <div className="min-w-0">

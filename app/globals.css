@@ -32,3 +32,21 @@
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
+
+/* PWA polish: respect iOS notch/home-indicator safe areas */
+@supports (padding: env(safe-area-inset-top)) {
+  body {
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}
+
+/* Prevent jarring pull-to-refresh reloads in standalone PWA mode */
+html, body {
+  overscroll-behavior-y: contain;
+}
+
+/* Remove the default tap-highlight flash for a more native feel */
+* {
+  -webkit-tap-highlight-color: transparent;
+}
