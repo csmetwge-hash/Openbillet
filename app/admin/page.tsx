@@ -61,6 +61,16 @@ export default function AdminPage() {
     const { data: { user }, error: authErr } = await supabase.auth.getUser();
     if (authErr || !user) { router.push('/auth'); return; }
 
+    // Workers should never land on /admin
+    const { data: membership } = await supabase
+      .from('team_members')
+      .select('role')
+      .eq('member_user_id', user.id)
+      .eq('status', 'active')
+      .maybeSingle();
+
+    if (membership?.role === 'worker') { router.push('/worker'); return; }
+
     const [portalsRes, workersRes] = await Promise.all([
       supabase.from('client_portals').select('*').eq('user_id', user.id).order('created_at', { ascending: false }),
       supabase.from('team_members').select('id, member_email').eq('owner_user_id', user.id).eq('role', 'worker').eq('status', 'active'),
