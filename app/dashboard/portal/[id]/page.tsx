@@ -717,7 +717,7 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
                     className="w-full border border-zinc-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-zinc-900 transition" />
                 </div>
                 <div>
-                  <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-1">Payment Link <span className="text-zinc-300">optional</span></label>
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-1">Payment Link <span className="text-zinc-300 normal-case">paste a link, or leave blank if paying by cash/check on completion</span></label>
                   <input type="url" placeholder="https://buy.stripe.com/..."
                     value={milestoneForm.payment_link} onChange={e => updateForm('payment_link', e.target.value)}
                     className="w-full border border-zinc-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-zinc-900 transition" />
@@ -726,13 +726,13 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
                   <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-1">Responsibility</label>
                   <select value={milestoneForm.responsibility} onChange={e => updateForm('responsibility', e.target.value)}
                     className="w-full border border-zinc-200 rounded-xl px-4 py-3 text-sm bg-white font-medium text-zinc-700 focus:outline-none">
-                    <option value="provider">Your responsibility</option>
-                    <option value="client">Customer responsibility</option>
+                    <option value="provider">We'll handle this</option>
+                    <option value="client">Client needs to take action</option>
                   </select>
                 </div>
                 <div className="grid grid-cols-2 gap-2">
                   <div>
-                    <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-1">Scheduled Date/Time <span className="text-zinc-300">optional</span></label>
+                    <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-1">Scheduled / Due Date <span className="text-zinc-300">optional</span></label>
                     <input type="datetime-local"
                       value={milestoneForm.scheduled_at} onChange={e => updateForm('scheduled_at', e.target.value)}
                       className="w-full border border-zinc-200 rounded-xl px-3 py-3 text-sm focus:outline-none focus:border-zinc-900 transition" />
