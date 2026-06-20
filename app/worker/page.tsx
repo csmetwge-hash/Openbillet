@@ -37,6 +37,7 @@ export default function WorkerDashboard() {
   const [loading, setLoading] = useState(true);
   const [jobs, setJobs] = useState<Job[]>([]);
   const [workerId, setWorkerId] = useState<string | null>(null);
+  const [workerEmail, setWorkerEmail] = useState<string>('');
   const [submittingId, setSubmittingId] = useState<string | null>(null);
   const [noteDrafts, setNoteDrafts] = useState<Record<string, string>>({});
   const [uploadingPhoto, setUploadingPhoto] = useState<string | null>(null);
@@ -51,7 +52,7 @@ export default function WorkerDashboard() {
 
     const { data: worker } = await supabase
       .from('team_members')
-      .select('id')
+      .select('id, member_email')
       .eq('member_user_id', currentUserId)
       .eq('owner_user_id', ownerId)
       .eq('role', 'worker')
@@ -61,6 +62,7 @@ export default function WorkerDashboard() {
     if (!worker) { router.push('/auth'); return; }
 
     setWorkerId(worker.id);
+    setWorkerEmail(worker.member_email);
     await fetchJobs(worker.id);
     setLoading(false);
   };
@@ -187,7 +189,9 @@ export default function WorkerDashboard() {
             <div className="p-1.5 bg-zinc-900 rounded-lg">
               <Calendar className="w-3.5 h-3.5 text-white" />
             </div>
-            <h1 className="text-sm font-black tracking-tight text-zinc-900">My Jobs</h1>
+            <h1 className="text-sm font-black tracking-tight text-zinc-900">
+              {workerEmail ? `${workerEmail.split('@')[0]}'s Jobs` : 'My Jobs'}
+            </h1>
           </div>
           <button onClick={handleLogout} className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-zinc-400 hover:text-zinc-700 transition cursor-pointer px-3 py-2 rounded-xl hover:bg-zinc-100">
             <LogOut className="w-3.5 h-3.5" /> Log Out
@@ -197,7 +201,7 @@ export default function WorkerDashboard() {
 
       <main className="max-w-2xl mx-auto px-4 py-6 space-y-6">
         <section className="space-y-3">
-          <h2 className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">Upcoming &amp; Active</h2>
+          <h2 className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">Upcoming &amp; Active <span className="normal-case font-medium text-zinc-300">· sorted by scheduled date</span></h2>
           {upcoming.length === 0 ? (
             <p className="text-xs text-zinc-400 italic border border-dashed border-zinc-300 rounded-2xl p-8 text-center">
               No jobs assigned right now.
