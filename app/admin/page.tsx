@@ -9,6 +9,7 @@ import {
   Plus, Share2, Settings, Eye, Archive, RotateCcw,
   MessageSquare, Calendar, AlertTriangle, User, ChevronRight,
   CheckCircle2, Clock, FolderPlus, ChevronDown, ChevronUp, Check,
+  Pencil, X, Save,
 } from 'lucide-react';
 
 interface Portal {
@@ -22,13 +23,24 @@ interface Portal {
   status: string;
 }
 
+interface Milestone {
+  id: string;
+  title: string;
+  description?: string;
+  amount?: string;
+  payment_link?: string;
+  status: string;
+  client_action_needed?: string;
+  scheduled_at?: string | null;
+}
+
 interface PortalMeta {
   messageCount: number;
   lastMessage: string | null;
   hasProposalAction: boolean;
   completedMilestones: number;
   totalMilestones: number;
-  upcomingMilestones: { id: string; title: string; status: string }[];
+  milestones: Milestone[];
 }
 
 interface ScheduledJob {
@@ -42,6 +54,12 @@ interface ScheduledJob {
   team_members: { member_email: string } | null;
 }
 
+const STATUS_OPTIONS = [
+  { value: 'incomplete', label: 'Incomplete' },
+  { value: 'in_progress', label: 'In Progress' },
+  { value: 'completed', label: 'Completed' },
+];
+
 export default function AdminPage() {
   const router = useRouter();
   const [portals, setPortals] = useState<Portal[]>([]);
@@ -51,8 +69,9 @@ export default function AdminPage() {
   const [copiedToken, setCopiedToken] = useState<string | null>(null);
   const [scheduledJobs, setScheduledJobs] = useState<ScheduledJob[]>([]);
   const [expandedPortalId, setExpandedPortalId] = useState<string | null>(null);
+  const [editingMilestone, setEditingMilestone] = useState<{ portalId: string; milestone: Milestone } | null>(null);
+  const [savingMilestone, setSavingMilestone] = useState(false);
 
-  // Create portal form
   const [clientName, setClientName] = useState('');
   const [projectName, setProjectName] = useState('');
   const [clientEmail, setClientEmail] = useState('');
@@ -63,11 +82,16 @@ export default function AdminPage() {
 
   useEffect(() => { init(); }, []);
 
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const portalParam = params.get('portal');
+    if (portalParam) setExpandedPortalId(portalParam);
+  }, [portals]);
+
   const init = async () => {
     const { data: { user }, error: authErr } = await supabase.auth.getUser();
     if (authErr || !user) { router.push('/auth'); return; }
 
-    // Workers should never land on /admin
     const { data: membership } = await supabase
       .from('team_members')
       .select('role')
@@ -102,7 +126,7 @@ export default function AdminPage() {
           .eq('portal_id', p.id).eq('is_from_client', true)
           .order('created_at', { ascending: false }).limit(1),
         supabase.from('portal_proposals').select('id').eq('portal_id', p.id).in('status', ['accepted', 'declined']),
-        supabase.from('portal_milestones').select('id, title, status').eq('portal_id', p.id).order('created_at', { ascending: true }),
+        supabase.from('portal_milestones').select('id, title, description, amount, payment_link, status, client_action_needed, scheduled_at').eq('portal_id', p.id).order('created_at', { ascending: true }),
       ]);
       const milestones = milestonesRes.data || [];
       meta[p.id] = {
@@ -111,10 +135,27 @@ export default function AdminPage() {
         hasProposalAction: (proposalsRes.data?.length || 0) > 0,
         completedMilestones: milestones.filter(m => m.status === 'completed').length,
         totalMilestones: milestones.length,
-        upcomingMilestones: milestones.filter(m => m.status !== 'completed').slice(0, 2),
+        milestones,
       };
     }));
     setPortalMeta(meta);
+  };
+
+  const refreshPortalMilestones = async (portalId: string) => {
+    const { data } = await supabase
+      .from('portal_milestones')
+      .select('id, title, description, amount, payment_link, status, client_action_needed, scheduled_at')
+      .eq('portal_id', portalId)
+      .order('created_at', { ascending: true });
+    setPortalMeta(prev => ({
+      ...prev,
+      [portalId]: {
+        ...prev[portalId],
+        milestones: data || [],
+        completedMilestones: (data || []).filter(m => m.status === 'completed').length,
+        totalMilestones: (data || []).length,
+      },
+    }));
   };
 
   const fetchScheduledJobs = async (portalIds: string[]) => {
@@ -157,6 +198,10 @@ export default function AdminPage() {
 
     if (!error && data) {
       setPortals(prev => [data, ...prev]);
+      setPortalMeta(prev => ({
+        ...prev,
+        [data.id]: { messageCount: 0, lastMessage: null, hasProposalAction: false, completedMilestones: 0, totalMilestones: 0, milestones: [] },
+      }));
       setClientName('');
       setProjectName('');
       setClientEmail('');
@@ -164,7 +209,6 @@ export default function AdminPage() {
       setClientAddress('');
       setShowForm(false);
 
-      // Auto-send the magic link to the client if we have their email
       if (trimmedEmail) {
         try {
           await fetch('/api/notify-client', {
@@ -213,6 +257,44 @@ export default function AdminPage() {
     setTimeout(() => setCopiedToken(null), 2000);
   };
 
+  const handleStatusChange = async (portalId: string, milestoneId: string, newStatus: string, title: string) => {
+    await supabase.from('portal_milestones').update({ status: newStatus }).eq('id', milestoneId);
+    await refreshPortalMilestones(portalId);
+    if (newStatus === 'completed') {
+      await supabase.from('portal_activity').insert({
+        portal_id: portalId, action_type: 'milestone_completed', actor: 'admin', description: `Milestone completed: ${title}`,
+      });
+      try {
+        await fetch('/api/notify-client', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ portalId, actionType: 'milestone_completed', detail: title }),
+        });
+      } catch (err) { console.error('Notify failed:', err); }
+    }
+  };
+
+  const openEditMilestone = (portalId: string, milestone: Milestone, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setEditingMilestone({ portalId, milestone: { ...milestone } });
+  };
+
+  const saveMilestoneEdit = async () => {
+    if (!editingMilestone) return;
+    setSavingMilestone(true);
+    const { portalId, milestone } = editingMilestone;
+    await supabase.from('portal_milestones').update({
+      title: milestone.title,
+      description: milestone.description || null,
+      amount: milestone.amount || null,
+      payment_link: milestone.payment_link || null,
+      client_action_needed: milestone.client_action_needed || null,
+    }).eq('id', milestone.id);
+    await refreshPortalMilestones(portalId);
+    setSavingMilestone(false);
+    setEditingMilestone(null);
+  };
+
   const formatScheduled = (iso: string) => {
     return new Date(iso).toLocaleString(undefined, {
       weekday: 'short', month: 'short', day: 'numeric',
@@ -236,7 +318,6 @@ export default function AdminPage() {
     <AppShell>
       <div className="font-sans antialiased">
 
-        {/* Header */}
         <header className="bg-white border-b border-zinc-200 sticky top-0 z-30">
           <div className="max-w-6xl mx-auto px-4 sm:px-6 h-14 flex items-center">
             <h1 className="text-sm font-black tracking-tight text-zinc-900">Control Center</h1>
@@ -245,7 +326,6 @@ export default function AdminPage() {
 
         <main className="max-w-6xl mx-auto px-4 sm:px-6 py-6 space-y-6">
 
-          {/* Flagged jobs alert banner */}
           {flaggedJobs.length > 0 && (
             <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex items-start gap-3">
               <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
@@ -255,12 +335,12 @@ export default function AdminPage() {
                   {flaggedJobs.map(job => {
                     const portal = Array.isArray(job.client_portals) ? job.client_portals[0] : job.client_portals;
                     return (
-                      <Link key={job.id} href={`/dashboard/portal/${job.portal_id}`} className="block text-xs text-amber-700 hover:text-amber-900 transition">
+                      <button key={job.id} onClick={() => setExpandedPortalId(job.portal_id)} className="block text-xs text-amber-700 hover:text-amber-900 transition text-left cursor-pointer">
                         <span className="font-semibold">{job.title}</span>
                         {' · '}{portal?.client_name}
                         {' · '}{job.worker_status === 'no_show' ? 'No-show' : 'Reschedule requested'}
                         {job.worker_note ? ` — ${job.worker_note}` : ''}
-                      </Link>
+                      </button>
                     );
                   })}
                 </div>
@@ -268,7 +348,6 @@ export default function AdminPage() {
             </div>
           )}
 
-          {/* Scheduled Jobs — horizontal scrolling strip */}
           {upcomingJobs.length > 0 && (
             <div>
               <div className="flex items-center gap-2 mb-3">
@@ -282,8 +361,8 @@ export default function AdminPage() {
                     const worker = Array.isArray(job.team_members) ? job.team_members[0] : job.team_members;
                     const flagged = job.worker_status === 'no_show' || job.worker_status === 'issue_reported';
                     return (
-                      <Link key={job.id} href={`/dashboard/portal/${job.portal_id}`}
-                        className={`shrink-0 w-56 snap-start p-3 rounded-xl border text-xs transition hover:border-zinc-300 ${flagged ? 'border-amber-200 bg-amber-50' : 'border-zinc-200 bg-white'}`}>
+                      <button key={job.id} onClick={() => setExpandedPortalId(job.portal_id)}
+                        className={`shrink-0 w-56 snap-start p-3 rounded-xl border text-xs text-left transition hover:border-zinc-300 cursor-pointer ${flagged ? 'border-amber-200 bg-amber-50' : 'border-zinc-200 bg-white'}`}>
                         <p className="font-bold text-zinc-900 truncate">{job.title}</p>
                         <p className="text-zinc-500 truncate mt-0.5">{portal?.client_name}</p>
                         <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
@@ -302,7 +381,7 @@ export default function AdminPage() {
                             {job.worker_status === 'no_show' ? 'No-show' : 'Reschedule'}
                           </span>
                         )}
-                      </Link>
+                      </button>
                     );
                   })}
                 </div>
@@ -315,7 +394,6 @@ export default function AdminPage() {
             </div>
           )}
 
-          {/* Create portal */}
           <div className="bg-white border border-zinc-200 rounded-2xl overflow-hidden">
             <button
               onClick={() => setShowForm(!showForm)}
@@ -370,7 +448,6 @@ export default function AdminPage() {
             )}
           </div>
 
-          {/* Filter tabs */}
           <div className="flex items-center justify-between">
             <h2 className="text-sm font-black text-zinc-900">
               {viewFilter === 'active' ? 'Active Portals' : 'Archived Portals'}
@@ -401,6 +478,8 @@ export default function AdminPage() {
                   ? Math.round((meta.completedMilestones / meta.totalMilestones) * 100)
                   : null;
                 const isExpanded = expandedPortalId === p.id;
+                const incompleteMilestones = meta?.milestones.filter(m => m.status !== 'completed') || [];
+                const completedMilestonesList = meta?.milestones.filter(m => m.status === 'completed') || [];
 
                 return (
                   <div key={p.id} className="bg-white border border-zinc-200 rounded-2xl overflow-hidden hover:border-zinc-300 transition">
@@ -446,19 +525,64 @@ export default function AdminPage() {
                     </button>
 
                     {isExpanded && (
-                      <div className="px-5 pb-5 border-t border-zinc-100 pt-4 space-y-4">
+                      <div className="px-5 pb-5 border-t border-zinc-100 pt-4 space-y-4" onClick={(e) => e.stopPropagation()}>
 
-                        {meta?.upcomingMilestones && meta.upcomingMilestones.length > 0 && (
-                          <div className="space-y-1.5">
-                            <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">Up next</p>
-                            {meta.upcomingMilestones.map(m => (
-                              <div key={m.id} className="flex items-center gap-2 text-xs text-zinc-600">
-                                <div className="w-1.5 h-1.5 rounded-full bg-zinc-300 shrink-0" />
-                                {m.title}
+                        <div className="space-y-2">
+                          <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">
+                            Incomplete Milestones {incompleteMilestones.length > 0 && `(${incompleteMilestones.length})`}
+                          </p>
+                          {incompleteMilestones.length === 0 ? (
+                            <p className="text-xs text-zinc-400 italic">No incomplete milestones.</p>
+                          ) : (
+                            <div className="space-y-1.5">
+                              {incompleteMilestones.map(m => (
+                                <div key={m.id} className="flex items-center gap-2 p-2.5 bg-zinc-50 border border-zinc-100 rounded-xl">
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-xs font-semibold text-zinc-800 truncate">{m.title}</p>
+                                    <div className="flex items-center gap-2 flex-wrap mt-0.5">
+                                      {m.amount && <span className="text-[10px] text-zinc-500">{m.amount}</span>}
+                                      {m.client_action_needed && (
+                                        <span className="text-[10px] text-amber-600 font-medium">Client: {m.client_action_needed}</span>
+                                      )}
+                                      {m.scheduled_at && (
+                                        <span className="text-[10px] text-zinc-400 flex items-center gap-0.5">
+                                          <Clock className="w-2.5 h-2.5" />{formatScheduled(m.scheduled_at)}
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+                                  <select
+                                    value={m.status}
+                                    onChange={(e) => handleStatusChange(p.id, m.id, e.target.value, m.title)}
+                                    onClick={(e) => e.stopPropagation()}
+                                    className="text-[10px] border border-zinc-200 rounded-lg px-2 py-1.5 bg-white text-zinc-600 focus:outline-none cursor-pointer shrink-0"
+                                  >
+                                    {STATUS_OPTIONS.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+                                  </select>
+                                  <button onClick={(e) => openEditMilestone(p.id, m, e)}
+                                    className="p-1.5 text-zinc-400 hover:text-zinc-700 hover:bg-zinc-200 rounded-lg transition cursor-pointer shrink-0">
+                                    <Pencil className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                          {completedMilestonesList.length > 0 && (
+                            <details className="text-xs">
+                              <summary className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 cursor-pointer hover:text-zinc-600">
+                                {completedMilestonesList.length} completed
+                              </summary>
+                              <div className="space-y-1 mt-1.5">
+                                {completedMilestonesList.map(m => (
+                                  <div key={m.id} className="flex items-center gap-2 p-2 bg-emerald-50/50 border border-emerald-100 rounded-lg text-[11px] text-zinc-500">
+                                    <CheckCircle2 className="w-3 h-3 text-emerald-500 shrink-0" />
+                                    <span className="truncate">{m.title}</span>
+                                  </div>
+                                ))}
                               </div>
-                            ))}
-                          </div>
-                        )}
+                            </details>
+                          )}
+                        </div>
 
                         {meta?.lastMessage && (
                           <div className="space-y-1">
@@ -490,7 +614,7 @@ export default function AdminPage() {
                           </button>
                           <Link href={`/portal/${p.magic_token}`}
                             className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider border border-zinc-200 bg-white hover:bg-zinc-50 text-zinc-600 px-3 py-2 rounded-xl transition">
-                            <Eye className="w-3.5 h-3.5" /> View
+                            <Eye className="w-3.5 h-3.5" /> Preview as Client
                           </Link>
                           <button
                             onClick={(e) => handleToggleArchive(p.id, p.status, e)}
@@ -513,6 +637,57 @@ export default function AdminPage() {
             </div>
           )}
         </main>
+
+        {editingMilestone && (
+          <div className="fixed inset-0 bg-black/40 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={() => setEditingMilestone(null)}>
+            <div className="bg-white rounded-t-3xl sm:rounded-2xl w-full sm:max-w-md p-5 space-y-4" onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-black text-zinc-900">Edit Milestone</h3>
+                <button onClick={() => setEditingMilestone(null)} className="text-zinc-400 hover:text-zinc-700 cursor-pointer">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-1">Title</label>
+                <input type="text" value={editingMilestone.milestone.title}
+                  onChange={(e) => setEditingMilestone(prev => prev ? { ...prev, milestone: { ...prev.milestone, title: e.target.value } } : prev)}
+                  className="w-full border border-zinc-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-zinc-900 transition" />
+              </div>
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-1">Description <span className="text-zinc-300 normal-case">optional</span></label>
+                <textarea value={editingMilestone.milestone.description || ''} rows={2}
+                  onChange={(e) => setEditingMilestone(prev => prev ? { ...prev, milestone: { ...prev.milestone, description: e.target.value } } : prev)}
+                  className="w-full border border-zinc-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-zinc-900 transition resize-none" />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-1">Amount <span className="text-zinc-300 normal-case">optional</span></label>
+                  <input type="text" value={editingMilestone.milestone.amount || ''} placeholder="$150"
+                    onChange={(e) => setEditingMilestone(prev => prev ? { ...prev, milestone: { ...prev.milestone, amount: e.target.value } } : prev)}
+                    className="w-full border border-zinc-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-zinc-900 transition" />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-1">Payment Link <span className="text-zinc-300 normal-case">optional</span></label>
+                  <input type="text" value={editingMilestone.milestone.payment_link || ''} placeholder="https://..."
+                    onChange={(e) => setEditingMilestone(prev => prev ? { ...prev, milestone: { ...prev.milestone, payment_link: e.target.value } } : prev)}
+                    className="w-full border border-zinc-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-zinc-900 transition" />
+                </div>
+              </div>
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-1">Client Needs To... <span className="text-zinc-300 normal-case">optional — leave blank if nothing's needed from them</span></label>
+                <input type="text" value={editingMilestone.milestone.client_action_needed || ''} placeholder="e.g. Approve color selection, provide gate code"
+                  onChange={(e) => setEditingMilestone(prev => prev ? { ...prev, milestone: { ...prev.milestone, client_action_needed: e.target.value } } : prev)}
+                  className="w-full border border-zinc-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-zinc-900 transition" />
+              </div>
+
+              <button onClick={saveMilestoneEdit} disabled={savingMilestone || !editingMilestone.milestone.title.trim()}
+                className="w-full bg-zinc-900 text-white py-3 rounded-xl text-sm font-bold hover:bg-zinc-700 transition cursor-pointer disabled:opacity-40 flex items-center justify-center gap-2">
+                <Save className="w-4 h-4" /> {savingMilestone ? 'Saving...' : 'Save Changes'}
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </AppShell>
   );
