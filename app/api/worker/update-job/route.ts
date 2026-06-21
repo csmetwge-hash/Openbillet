@@ -63,14 +63,13 @@ export async function POST(req: Request) {
     let update: Record<string, any> = {};
     let notifyType: string | null = null;
 
-    if (action === 'complete') {
-      const hasOnlinePaymentLink = 
-        (!!milestone.payment_request && milestone.payment_request.includes('http')) ||
-        (!!milestone.payment_link && milestone.payment_link.includes('http'));
+    if (action === 'complete_paid') {
+      update = { worker_status: 'completed', worker_note: null, status: 'completed' };
+      if (photoBeforeUrl) update.photo_before_url = photoBeforeUrl;
+      if (photoAfterUrl) update.photo_after_url = photoAfterUrl;
+
+    } else if (action === 'complete_awaiting_payment') {
       update = { worker_status: 'completed', worker_note: null };
-      if (!hasOnlinePaymentLink) {
-        update.status = 'completed';
-      }
       if (photoBeforeUrl) update.photo_before_url = photoBeforeUrl;
       if (photoAfterUrl) update.photo_after_url = photoAfterUrl;
 
