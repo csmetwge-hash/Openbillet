@@ -20,13 +20,13 @@ interface MilestoneForm {
   description: string;
   amount: string;
   payment_link: string;
-  responsibility: string;
+  client_action_needed: string;
   scheduled_at: string;
   assigned_worker_id: string;
 }
 
 const emptyForm: MilestoneForm = {
-  title: '', description: '', amount: '', payment_link: '', responsibility: 'provider',
+  title: '', description: '', amount: '', payment_link: '', client_action_needed: '',
   scheduled_at: '', assigned_worker_id: '',
 };
 
@@ -232,7 +232,7 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
     setMilestoneForm({
       title: m.title || '', description: m.description || '',
       amount: m.amount || '', payment_link: m.payment_link || '',
-      responsibility: m.responsibility || 'provider',
+      client_action_needed: m.client_action_needed || '',
       scheduled_at: m.scheduled_at ? new Date(m.scheduled_at).toISOString().slice(0, 16) : '',
       assigned_worker_id: m.assigned_worker_id || '',
     });
@@ -246,7 +246,7 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
     const payload = {
       title: milestoneForm.title, description: milestoneForm.description || null,
       amount: milestoneForm.amount || null, payment_link: milestoneForm.payment_link || null,
-      responsibility: milestoneForm.responsibility,
+      client_action_needed: milestoneForm.client_action_needed || null,
       scheduled_at: milestoneForm.scheduled_at ? new Date(milestoneForm.scheduled_at).toISOString() : null,
       assigned_worker_id: milestoneForm.assigned_worker_id || null,
     };
@@ -255,8 +255,8 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
     } else {
       await supabase.from('portal_milestones').insert({ ...payload, portal_id: portalId, status: 'incomplete' });
       await logActivity('milestone_added', `Milestone added: ${milestoneForm.title}`);
-      if (milestoneForm.responsibility === 'client') {
-        await notifyClient('milestone_client_action', milestoneForm.title);
+      if (milestoneForm.client_action_needed.trim()) {
+        await notifyClient('milestone_client_action', `${milestoneForm.title} — ${milestoneForm.client_action_needed}`);
       }
     }
     setShowMilestoneForm(false); setEditingMilestoneId(null); setMilestoneForm(emptyForm);
@@ -723,12 +723,10 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
                     className="w-full border border-zinc-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-zinc-900 transition" />
                 </div>
                 <div>
-                  <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-1">Responsibility</label>
-                  <select value={milestoneForm.responsibility} onChange={e => updateForm('responsibility', e.target.value)}
-                    className="w-full border border-zinc-200 rounded-xl px-4 py-3 text-sm bg-white font-medium text-zinc-700 focus:outline-none">
-                    <option value="provider">We'll handle this</option>
-                    <option value="client">Client needs to take action</option>
-                  </select>
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-1">Client Needs To... <span className="text-zinc-300 normal-case">optional — leave blank if nothing's needed from them</span></label>
+                  <input type="text" placeholder="e.g. Approve color selection, provide gate code"
+                    value={milestoneForm.client_action_needed} onChange={e => updateForm('client_action_needed', e.target.value)}
+                    className="w-full border border-zinc-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-zinc-900 transition" />
                 </div>
                 <div className="grid grid-cols-2 gap-2">
                   <div>
@@ -789,7 +787,9 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
                           : m.status === 'in_progress' ? 'bg-amber-50 text-amber-600'
                           : 'bg-zinc-100 text-zinc-500'
                         }`}>{m.status.replace('_', ' ')}</span>
-                        <span className="text-[10px] text-zinc-400">{m.responsibility === 'client' ? 'Customer' : 'You'}</span>
+                        {m.client_action_needed && (
+                          <span className="text-[10px] text-amber-600 font-medium">Client: {m.client_action_needed}</span>
+                        )}
                         {m.amount && <span className="text-[10px] font-bold text-zinc-600">{m.amount}</span>}
                         {m.scheduled_at && (
                           <span className="text-[10px] text-zinc-400 flex items-center gap-1">
