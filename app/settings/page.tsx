@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useRouter } from 'next/navigation';
+import AppShell from '@/components/AppShell'
 import {
   ArrowLeft, Upload, Save, UserPlus, Trash2, Mail,
   CheckCircle2, AlertCircle, Crown, Shield, Eye, Wrench,
@@ -138,6 +139,7 @@ export default function SettingsPage() {
   );
 
   return (
+    <AppShell>
     <div className="min-h-screen bg-zinc-50 font-sans antialiased">
 
       {/* Header */}
@@ -343,5 +345,6 @@ export default function SettingsPage() {
 
       </div>
     </div>
+    </AppShell>
   );
 }
