@@ -2,7 +2,8 @@
 
 import React, { useEffect, useState, useRef, use } from 'react';
 import { supabase } from '@/lib/supabase';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
+import AppShell from '@/components/AppShell';
 import {
   ArrowLeft, FileIcon, MessageSquare, Send, Upload,
   Layers, Plus, Trash2, ExternalLink, ClipboardList,
@@ -48,6 +49,9 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
 
   const pageTopRef = useRef<HTMLDivElement>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
+  const milestoneRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const searchParams = useSearchParams();
+  const [highlightedMilestoneId, setHighlightedMilestoneId] = useState<string | null>(null);
 
   // Milestone form
   const [showMilestoneForm, setShowMilestoneForm] = useState(false);
@@ -109,6 +113,18 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
   }, [portalId]);
 
   useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [notes]);
+
+  useEffect(() => {
+    const milestoneParam = searchParams?.get('milestone');
+    if (milestoneParam && milestones.length > 0) {
+      setActiveTab('milestones');
+      setHighlightedMilestoneId(milestoneParam);
+      setTimeout(() => {
+        milestoneRefs.current[milestoneParam]?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        setTimeout(() => setHighlightedMilestoneId(null), 2500);
+      }, 300);
+    }
+  }, [milestones, searchParams]);
 
   const fetchAll = async () => {
     const { ownerId, role } = await resolveWorkspaceAccess();
@@ -499,6 +515,7 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
   ];
 
   return (
+    <AppShell>
     <div ref={pageTopRef} className="min-h-screen bg-zinc-50 font-sans antialiased">
       <input ref={photoInputRef} type="file" accept="image/*" className="hidden" onChange={handlePhotoUpload} />
 
@@ -765,7 +782,8 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
             )}
 
             {milestones.map(m => (
-              <div key={m.id} className={`bg-white border rounded-2xl overflow-hidden transition ${m.status === 'completed' ? 'border-zinc-100 opacity-80' : 'border-zinc-200'}`}>
+              <div key={m.id} ref={el => { milestoneRefs.current[m.id] = el; }}
+                className={`bg-white border rounded-2xl overflow-hidden transition ${highlightedMilestoneId === m.id ? 'border-blue-400 ring-2 ring-blue-200' : m.status === 'completed' ? 'border-zinc-100 opacity-80' : 'border-zinc-200'}`}>
                 <div className="p-4">
                   <div className="flex items-start gap-3">
                     <button onClick={() => advanceMilestone(m.id, m.status, m.title)}
@@ -1201,5 +1219,6 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
 
       </div>
     </div>
+    </AppShell>
   );
 }
