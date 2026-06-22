@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabase';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, ExternalLink, CheckCircle2, AlertCircle } from 'lucide-react';
 import Link from 'next/link';
+import AppShell from '@/components/AppShell';
 
 export default function BillingPage() {
   const [status, setStatus] = useState<string>('inactive');
@@ -72,6 +73,7 @@ export default function BillingPage() {
   const isActive = status === 'active';
 
   return (
+    <AppShell>
     <div className="min-h-screen bg-zinc-50 text-zinc-900 py-12 px-6">
       <div className="max-w-md w-full mx-auto space-y-8">
 
@@ -157,5 +159,6 @@ export default function BillingPage() {
         </p>
       </div>
     </div>
+    </AppShell>
   );
 }
