@@ -128,7 +128,7 @@ export default function AdminPage() {
           .eq('portal_id', p.id).eq('is_from_client', true)
           .order('created_at', { ascending: false }).limit(1),
         supabase.from('portal_proposals').select('id').eq('portal_id', p.id).in('status', ['accepted', 'declined']),
-        supabase.from('portal_milestones').select('id, title, description, amount, payment_link, status, client_action_needed, scheduled_at').eq('portal_id', p.id).order('created_at', { ascending: true }),
+        supabase.from('portal_milestones').select('id, title, description, amount, payment_link, status, client_action_needed, scheduled_at, assigned_worker_id').eq('portal_id', p.id).order('created_at', { ascending: true }),
       ]);
       const milestones = milestonesRes.data || [];
       meta[p.id] = {
@@ -146,7 +146,7 @@ export default function AdminPage() {
   const refreshPortalMilestones = async (portalId: string) => {
     const { data } = await supabase
       .from('portal_milestones')
-      .select('id, title, description, amount, payment_link, status, client_action_needed, scheduled_at')
+      .select('id, title, description, amount, payment_link, status, client_action_needed, scheduled_at, assigned_worker_id')
       .eq('portal_id', portalId)
       .order('created_at', { ascending: true });
     setPortalMeta(prev => ({
@@ -379,7 +379,7 @@ export default function AdminPage() {
                       }}
                         className={`shrink-0 w-56 snap-start p-3 rounded-xl border text-xs text-left transition hover:border-zinc-300 cursor-pointer ${flagged ? 'border-amber-200 bg-amber-50' : overdue ? 'border-orange-200 bg-orange-50' : 'border-zinc-200 bg-white'}`}>
                         <p className="font-bold text-zinc-900 truncate">{job.title}</p>
-                        <p className="text-zinc-500 truncate mt-0.5">{portal?.client_name}</p>
+                        <p className="text-zinc-500 truncate mt-0.5">{portal?.client_name} · {portal?.project_name}</p>
                         <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
                           <span className="text-zinc-400 flex items-center gap-1">
                             <Clock className="w-3 h-3" />{formatScheduled(job.scheduled_at)}
@@ -713,7 +713,11 @@ export default function AdminPage() {
                 <div>
                   <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-1">Scheduled / Due Date <span className="text-zinc-300 normal-case">optional</span></label>
                   <input type="datetime-local"
-                    value={editingMilestone.milestone.scheduled_at ? new Date(editingMilestone.milestone.scheduled_at).toISOString().slice(0, 16) : ''}
+                    value={editingMilestone.milestone.scheduled_at ? (() => {
+                      const d = new Date(editingMilestone.milestone.scheduled_at!);
+                      const offset = d.getTimezoneOffset() * 60000;
+                      return new Date(d.getTime() - offset).toISOString().slice(0, 16);
+                    })() : ''}
                     onChange={(e) => setEditingMilestone(prev => prev ? { ...prev, milestone: { ...prev.milestone, scheduled_at: e.target.value || null } } : prev)}
                     className="w-full border border-zinc-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-zinc-900 transition [color-scheme:light]" />
                 </div>
