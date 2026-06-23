@@ -67,11 +67,13 @@ export async function POST(req: Request) {
       update = { worker_status: 'completed', worker_note: null, status: 'completed' };
       if (photoBeforeUrl) update.photo_before_url = photoBeforeUrl;
       if (photoAfterUrl) update.photo_after_url = photoAfterUrl;
+      notifyType = 'job_completed_paid';
 
     } else if (action === 'complete_awaiting_payment') {
       update = { worker_status: 'completed', worker_note: null };
       if (photoBeforeUrl) update.photo_before_url = photoBeforeUrl;
       if (photoAfterUrl) update.photo_after_url = photoAfterUrl;
+      notifyType = 'job_completed_awaiting_payment';
 
     } else if (action === 'no_show') {
       update = { worker_status: 'no_show', worker_note: note || null };
@@ -99,22 +101,32 @@ export async function POST(req: Request) {
 
     if (updateErr) throw updateErr;
 
-    // Immediate notification to manager for no-show / reschedule
+    // Route notification to correct recipient
     if (notifyType) {
       try {
-        await fetch(`${process.env.NEXT_PUBLIC_APP_URL}/api/notify-admin`, {
+        const isClientNotify = notifyType === 'job_completed_paid' || notifyType === 'job_completed_awaiting_payment';
+        const endpoint = isClientNotify ? '/api/notify-client' : '/api/notify-admin';
+        const body = isClientNotify
+          ? {
+              portalId: milestone.portal_id,
+              actionType: notifyType,
+              detail: milestone.title,
+            }
+          : {
+              portalId: milestone.portal_id,
+              actionType: notifyType,
+              clientName: portalInfo?.client_name,
+              projectName: portalInfo?.project_name,
+              detail: `${milestone.title}${note ? ` — Note: ${note}` : ''}`,
+            };
+
+        await fetch(`${process.env.NEXT_PUBLIC_APP_URL}${endpoint}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            portalId: milestone.portal_id,
-            actionType: notifyType,
-            clientName: portalInfo?.client_name,
-            projectName: portalInfo?.project_name,
-            detail: `${milestone.title}${note ? ` — Note: ${note}` : ''}`,
-          }),
+          body: JSON.stringify(body),
         });
       } catch (notifyErr) {
-        console.error('Failed to send manager notification:', notifyErr);
+        console.error('Failed to send notification:', notifyErr);
       }
     }
 
