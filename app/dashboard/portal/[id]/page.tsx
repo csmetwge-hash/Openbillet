@@ -4,6 +4,7 @@ import React, { useEffect, useState, useRef, use } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useRouter, useSearchParams } from 'next/navigation';
 import AppShell from '@/components/AppShell';
+import SmartDateTimePicker from '@/components/SmartDateTimePicker';
 import {
   ArrowLeft, FileIcon, MessageSquare, Send, Upload,
   Layers, Plus, Trash2, ExternalLink, ClipboardList,
@@ -65,6 +66,8 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
   const [reschedulingId, setReschedulingId] = useState<string | null>(null);
   const [rescheduleDate, setRescheduleDate] = useState('');
   const [reschedulingSaving, setReschedulingSaving] = useState(false);
+  const [formScheduleDate, setFormScheduleDate] = useState('');
+  const [formScheduleTime, setFormScheduleTime] = useState('');
 
   // Templates
   const [templates, setTemplates] = useState<any[]>([]);
@@ -249,11 +252,21 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
       title: m.title || '', description: m.description || '',
       amount: m.amount || '', payment_link: m.payment_link || '',
       client_action_needed: m.client_action_needed || '',
-      scheduled_at: m.scheduled_at ? new Date(m.scheduled_at).toISOString().slice(0, 16) : '',
+      scheduled_at: '',
       assigned_worker_id: m.assigned_worker_id || '',
     });
     setShowMilestoneForm(true);
     pageTopRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (m.scheduled_at) {
+      const d = new Date(m.scheduled_at);
+      const offset = d.getTimezoneOffset() * 60000;
+      const local = new Date(d.getTime() - offset);
+      setFormScheduleDate(local.toISOString().slice(0, 10));
+      setFormScheduleTime(local.toISOString().slice(11, 16));
+    } else {
+      setFormScheduleDate('');
+      setFormScheduleTime('');
+    }
   };
 
   const saveMilestone = async (e: React.FormEvent) => {
@@ -263,7 +276,7 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
       title: milestoneForm.title, description: milestoneForm.description || null,
       amount: milestoneForm.amount || null, payment_link: milestoneForm.payment_link || null,
       client_action_needed: milestoneForm.client_action_needed || null,
-      scheduled_at: milestoneForm.scheduled_at ? new Date(milestoneForm.scheduled_at).toISOString() : null,
+      scheduled_at: formScheduleDate ? new Date(`${formScheduleDate}T${formScheduleTime || '00:00'}`).toISOString() : null,
       assigned_worker_id: milestoneForm.assigned_worker_id || null,
     };
     if (editingMilestoneId) {
@@ -274,8 +287,11 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
       if (milestoneForm.client_action_needed.trim()) {
         await notifyClient('milestone_client_action', `${milestoneForm.title} — ${milestoneForm.client_action_needed}`);
       }
+      if (formScheduleDate) {
+        await notifyClient('schedule_updated', milestoneForm.title);
+      }
     }
-    setShowMilestoneForm(false); setEditingMilestoneId(null); setMilestoneForm(emptyForm);
+    setShowMilestoneForm(false); setEditingMilestoneId(null); setMilestoneForm(emptyForm); setFormScheduleDate(''); setFormScheduleTime('');
     const { data } = await supabase.from('portal_milestones').select('*').eq('portal_id', portalId).order('created_at', { ascending: true });
     setMilestones(data || []);
   };
@@ -745,17 +761,21 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
                     value={milestoneForm.client_action_needed} onChange={e => updateForm('client_action_needed', e.target.value)}
                     className="w-full border border-zinc-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-zinc-900 transition" />
                 </div>
-                <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-3">
                   <div>
-                    <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-1">Scheduled / Due Date <span className="text-zinc-300">optional</span></label>
-                    <input type="datetime-local"
-                      value={milestoneForm.scheduled_at} onChange={e => updateForm('scheduled_at', e.target.value)}
-                      className="w-full border border-zinc-200 rounded-xl px-3 py-3 text-sm focus:outline-none focus:border-zinc-900 transition" />
+                    <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-1.5">Scheduled / Due Date <span className="text-zinc-300 normal-case font-medium">optional</span></label>
+                    <SmartDateTimePicker
+                      date={formScheduleDate}
+                      time={formScheduleTime}
+                      onDateChange={setFormScheduleDate}
+                      onTimeChange={setFormScheduleTime}
+                      onClear={() => { setFormScheduleDate(''); setFormScheduleTime(''); }}
+                    />
                   </div>
                   <div>
                     <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-1">Assigned To</label>
                     <select value={milestoneForm.assigned_worker_id} onChange={e => updateForm('assigned_worker_id', e.target.value)}
-                      className="w-full border border-zinc-200 rounded-xl px-3 py-3 text-sm bg-white font-medium text-zinc-700 focus:outline-none">
+                      className="w-full border border-zinc-200 rounded-xl px-4 py-3 text-sm bg-white font-medium text-zinc-700 focus:outline-none">
                       <option value="">Myself / Unassigned</option>
                       {workers.map(w => <option key={w.id} value={w.id}>{w.member_email}</option>)}
                     </select>
