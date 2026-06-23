@@ -41,11 +41,6 @@
   }
 }
 
-/* Prevent jarring pull-to-refresh reloads in standalone PWA mode */
-html, body {
-  overscroll-behavior-y: contain;
-}
-
 /* Remove the default tap-highlight flash for a more native feel */
 * {
   -webkit-tap-highlight-color: transparent;
