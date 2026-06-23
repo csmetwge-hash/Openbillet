@@ -704,7 +704,7 @@ export default function AdminPage() {
 
         {editingMilestone && (
           <div className="fixed inset-0 bg-black/40 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={() => setEditingMilestone(null)}>
-            <div className="bg-white rounded-t-3xl sm:rounded-2xl w-full sm:max-w-md p-5 space-y-4" onClick={(e) => e.stopPropagation()}>
+            <div className="bg-white rounded-t-3xl sm:rounded-2xl w-full sm:max-w-md p-5 space-y-4 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
               <div className="flex items-center justify-between">
                 <h3 className="text-sm font-black text-zinc-900">Edit Milestone</h3>
                 <button onClick={() => setEditingMilestone(null)} className="text-zinc-400 hover:text-zinc-700 cursor-pointer">
