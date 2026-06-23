@@ -5,7 +5,7 @@ import { supabase } from '@/lib/supabase';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import AppShell from '@/components/AppShell';
-import DateTimePicker from '@/components/DateTimePicker';
+import SmartDateTimePicker from '@/components/SmartDateTimePicker';
 import {
   Plus, Share2, Settings, Eye, Archive, RotateCcw,
   MessageSquare, Calendar, AlertTriangle, User, ChevronRight,
@@ -310,8 +310,10 @@ export default function AdminPage() {
     await refreshPortalMilestones(portalId);
     fetchScheduledJobs(portals.map(p => p.id));
 
-    // Notify client if schedule date was set/changed
-    if (editScheduleDate) {
+    // Notify client if a schedule date was set
+    const hadDate = !!editingMilestone.milestone.scheduled_at;
+    const hasDate = !!editScheduleDate;
+    if (hasDate) {
       try {
         await fetch('/api/notify-client', {
           method: 'POST',
@@ -743,15 +745,17 @@ export default function AdminPage() {
                   className="w-full border border-zinc-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-zinc-900 transition" />
               </div>
 
-              <div className="grid grid-cols-1 gap-3">
-                <DateTimePicker
-                  date={editScheduleDate}
-                  time={editScheduleTime}
-                  onDateChange={setEditScheduleDate}
-                  onTimeChange={setEditScheduleTime}
-                  onClear={() => { setEditScheduleDate(''); setEditScheduleTime(''); }}
-                  label="Scheduled / Due Date (optional)"
-                />
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-1.5">Scheduled / Due Date <span className="text-zinc-300 normal-case font-medium">optional</span></label>
+                  <SmartDateTimePicker
+                    date={editScheduleDate}
+                    time={editScheduleTime}
+                    onDateChange={setEditScheduleDate}
+                    onTimeChange={setEditScheduleTime}
+                    onClear={() => { setEditScheduleDate(''); setEditScheduleTime(''); }}
+                  />
+                </div>
                 <div>
                   <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-1">Assigned To</label>
                   <select
