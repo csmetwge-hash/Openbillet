@@ -41,6 +41,7 @@ export async function POST(req: Request) {
       file_uploaded: `New file available — ${portal.project_name}`,
       milestone_client_action: `Action required on your project — ${portal.project_name}`,
       portal_created: `Your project workspace is ready — ${portal.project_name}`,
+      schedule_updated: `Your project schedule has been updated — ${portal.project_name}`,
     };
 
     const bodyLines: Record<string, string> = {
@@ -50,6 +51,7 @@ export async function POST(req: Request) {
       file_uploaded: `A new file has been uploaded to your project portal for <strong>${portal.project_name}</strong>${detail ? `: <strong>${detail}</strong>` : ''}.`,
       milestone_client_action: `A milestone requires your attention on <strong>${portal.project_name}</strong>${detail ? `: <strong>${detail}</strong>` : ''}.`,
       portal_created: `Your private project workspace has been created. You can track progress, view files, and communicate with your project team here at any time.`,
+      schedule_updated: `A schedule update has been made to your project <strong>${portal.project_name}</strong>. Please check your portal for the latest timeline.`,
     };
 
     const subject = subjects[actionType] || `Update on ${portal.project_name}`;
