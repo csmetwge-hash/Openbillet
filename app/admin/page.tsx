@@ -72,6 +72,8 @@ export default function AdminPage() {
   const [expandedPortalId, setExpandedPortalId] = useState<string | null>(null);
   const [editingMilestone, setEditingMilestone] = useState<{ portalId: string; milestone: Milestone } | null>(null);
   const [savingMilestone, setSavingMilestone] = useState(false);
+  const [editScheduleDate, setEditScheduleDate] = useState('');
+  const [editScheduleTime, setEditScheduleTime] = useState('');
   const [workers, setWorkers] = useState<{ id: string; member_email: string }[]>([]);
 
   const [clientName, setClientName] = useState('');
@@ -279,6 +281,16 @@ export default function AdminPage() {
   const openEditMilestone = (portalId: string, milestone: Milestone, e: React.MouseEvent) => {
     e.stopPropagation();
     setEditingMilestone({ portalId, milestone: { ...milestone } });
+    if (milestone.scheduled_at) {
+      const d = new Date(milestone.scheduled_at);
+      const offset = d.getTimezoneOffset() * 60000;
+      const local = new Date(d.getTime() - offset);
+      setEditScheduleDate(local.toISOString().slice(0, 10));
+      setEditScheduleTime(local.toISOString().slice(11, 16));
+    } else {
+      setEditScheduleDate('');
+      setEditScheduleTime('');
+    }
   };
 
   const saveMilestoneEdit = async () => {
@@ -291,12 +303,31 @@ export default function AdminPage() {
       amount: milestone.amount || null,
       payment_link: milestone.payment_link || null,
       client_action_needed: milestone.client_action_needed || null,
-      scheduled_at: milestone.scheduled_at ? new Date(milestone.scheduled_at).toISOString() : null,
+      scheduled_at: editScheduleDate ? new Date(`${editScheduleDate}T${editScheduleTime || '00:00'}`).toISOString() : null,
       assigned_worker_id: milestone.assigned_worker_id || null,
     }).eq('id', milestone.id);
     await refreshPortalMilestones(portalId);
+    fetchScheduledJobs(portals.map(p => p.id));
+
+    // Notify client if schedule date was set/changed
+    if (editScheduleDate) {
+      try {
+        await fetch('/api/notify-client', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            portalId,
+            actionType: 'schedule_updated',
+            detail: milestone.title,
+          }),
+        });
+      } catch (err) { console.error('Schedule notify failed:', err); }
+    }
+
     setSavingMilestone(false);
     setEditingMilestone(null);
+    setEditScheduleDate('');
+    setEditScheduleTime('');
   };
 
   const formatScheduled = (iso: string) => {
@@ -378,8 +409,10 @@ export default function AdminPage() {
                         }
                       }}
                         className={`shrink-0 w-56 snap-start p-3 rounded-xl border text-xs text-left transition hover:border-zinc-300 cursor-pointer ${flagged ? 'border-amber-200 bg-amber-50' : overdue ? 'border-orange-200 bg-orange-50' : 'border-zinc-200 bg-white'}`}>
+                        <p className="text-[9px] font-bold uppercase tracking-wider text-zinc-400">Milestone</p>
                         <p className="font-bold text-zinc-900 truncate">{job.title}</p>
-                        <p className="text-zinc-500 truncate mt-0.5">{portal?.client_name} · {portal?.project_name}</p>
+                        <p className="text-[9px] font-bold uppercase tracking-wider text-zinc-400 mt-1.5">Portal</p>
+                        <p className="text-zinc-500 truncate">{portal?.client_name} · {portal?.project_name}</p>
                         <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
                           <span className="text-zinc-400 flex items-center gap-1">
                             <Clock className="w-3 h-3" />{formatScheduled(job.scheduled_at)}
@@ -710,16 +743,22 @@ export default function AdminPage() {
               </div>
 
               <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-1">Scheduled / Due Date <span className="text-zinc-300 normal-case">optional</span></label>
-                  <input type="datetime-local"
-                    value={editingMilestone.milestone.scheduled_at ? (() => {
-                      const d = new Date(editingMilestone.milestone.scheduled_at!);
-                      const offset = d.getTimezoneOffset() * 60000;
-                      return new Date(d.getTime() - offset).toISOString().slice(0, 16);
-                    })() : ''}
-                    onChange={(e) => setEditingMilestone(prev => prev ? { ...prev, milestone: { ...prev.milestone, scheduled_at: e.target.value || null } } : prev)}
-                    className="w-full border border-zinc-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-zinc-900 transition [color-scheme:light]" />
+                <div className="space-y-2">
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-400">Scheduled / Due Date <span className="text-zinc-300 normal-case">optional</span></label>
+                  <input type="date"
+                    value={editScheduleDate}
+                    onChange={(e) => setEditScheduleDate(e.target.value)}
+                    className="w-full border border-zinc-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-zinc-900 transition" />
+                  <input type="time"
+                    value={editScheduleTime}
+                    onChange={(e) => setEditScheduleTime(e.target.value)}
+                    className="w-full border border-zinc-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-zinc-900 transition" />
+                  {editScheduleDate && (
+                    <button type="button" onClick={() => { setEditScheduleDate(''); setEditScheduleTime(''); }}
+                      className="text-[10px] text-zinc-400 hover:text-red-500 transition cursor-pointer">
+                      Clear date
+                    </button>
+                  )}
                 </div>
                 <div>
                   <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-1">Assigned To</label>
