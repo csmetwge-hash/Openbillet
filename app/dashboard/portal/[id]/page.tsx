@@ -296,10 +296,8 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
     setMilestones(data || []);
   };
 
-  const advanceMilestone = async (id: string, current: string, title: string) => {
+  const advanceMilestone = async (id: string, newStatus: string, title: string) => {
     if (isReadOnly) return;
-    const next: Record<string, string> = { incomplete: 'in_progress', in_progress: 'completed', completed: 'incomplete' };
-    const newStatus = next[current];
     await supabase.from('portal_milestones').update({ status: newStatus }).eq('id', id);
     setMilestones(prev => prev.map(m => m.id === id ? { ...m, status: newStatus } : m));
     if (newStatus === 'completed') {
@@ -806,16 +804,24 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
                 className={`bg-white border rounded-2xl overflow-hidden transition ${highlightedMilestoneId === m.id ? 'border-blue-400 ring-2 ring-blue-200' : m.status === 'completed' ? 'border-zinc-100 opacity-80' : 'border-zinc-200'}`}>
                 <div className="p-4">
                   <div className="flex items-start gap-3">
-                    <button onClick={() => advanceMilestone(m.id, m.status, m.title)}
-                      disabled={isReadOnly}
-                      className={`shrink-0 mt-0.5 w-6 h-6 rounded-full border-2 flex items-center justify-center transition ${isReadOnly ? 'cursor-default' : 'cursor-pointer'} ${
-                        m.status === 'completed' ? 'bg-zinc-900 border-zinc-900'
-                        : m.status === 'in_progress' ? 'border-amber-400'
-                        : 'border-zinc-300 hover:border-zinc-500'
-                      }`}>
-                      {m.status === 'completed' && <Check className="w-3 h-3 text-white" />}
-                      {m.status === 'in_progress' && <div className="w-2 h-2 bg-amber-400 rounded-full" />}
-                    </button>
+                    {!isReadOnly ? (
+                      <select
+                        value={m.status}
+                        onChange={(e) => advanceMilestone(m.id, e.target.value, m.title)}
+                        onClick={(e) => e.stopPropagation()}
+                        className="shrink-0 text-[10px] border border-zinc-200 rounded-lg px-2 py-1.5 bg-white text-zinc-600 focus:outline-none cursor-pointer"
+                      >
+                        <option value="incomplete">Incomplete</option>
+                        <option value="in_progress">In Progress</option>
+                        <option value="completed">Completed</option>
+                      </select>
+                    ) : (
+                      <span className={`shrink-0 text-[9px] font-bold uppercase px-2 py-1 rounded-full ${
+                        m.status === 'completed' ? 'bg-emerald-50 text-emerald-600' :
+                        m.status === 'in_progress' ? 'bg-amber-50 text-amber-600' :
+                        'bg-zinc-100 text-zinc-500'
+                      }`}>{m.status.replace('_', ' ')}</span>
+                    )}
                     <div className="flex-1 min-w-0">
                       <p className={`text-sm font-semibold ${m.status === 'completed' ? 'line-through text-zinc-400' : 'text-zinc-900'}`}>{m.title}</p>
                       {m.description && <p className="text-xs text-zinc-500 mt-1 leading-relaxed">{m.description}</p>}
