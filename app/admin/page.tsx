@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabase';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import AppShell from '@/components/AppShell';
+import DateTimePicker from '@/components/DateTimePicker';
 import {
   Plus, Share2, Settings, Eye, Archive, RotateCcw,
   MessageSquare, Calendar, AlertTriangle, User, ChevronRight,
@@ -742,24 +743,15 @@ export default function AdminPage() {
                   className="w-full border border-zinc-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-zinc-900 transition" />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-2">
-                  <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-400">Scheduled / Due Date <span className="text-zinc-300 normal-case">optional</span></label>
-                  <input type="date"
-                    value={editScheduleDate}
-                    onChange={(e) => setEditScheduleDate(e.target.value)}
-                    className="w-full border border-zinc-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-zinc-900 transition" />
-                  <input type="time"
-                    value={editScheduleTime}
-                    onChange={(e) => setEditScheduleTime(e.target.value)}
-                    className="w-full border border-zinc-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-zinc-900 transition" />
-                  {editScheduleDate && (
-                    <button type="button" onClick={() => { setEditScheduleDate(''); setEditScheduleTime(''); }}
-                      className="text-[10px] text-zinc-400 hover:text-red-500 transition cursor-pointer">
-                      Clear date
-                    </button>
-                  )}
-                </div>
+              <div className="grid grid-cols-1 gap-3">
+                <DateTimePicker
+                  date={editScheduleDate}
+                  time={editScheduleTime}
+                  onDateChange={setEditScheduleDate}
+                  onTimeChange={setEditScheduleTime}
+                  onClear={() => { setEditScheduleDate(''); setEditScheduleTime(''); }}
+                  label="Scheduled / Due Date (optional)"
+                />
                 <div>
                   <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-1">Assigned To</label>
                   <select
