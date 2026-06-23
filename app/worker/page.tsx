@@ -19,6 +19,8 @@ interface Job {
   title: string;
   description: string | null;
   payment_request: string | null;
+  amount: string | null;
+  payment_link: string | null;
   scheduled_at: string | null;
   worker_status: string | null;
   worker_note: string | null;
@@ -70,7 +72,7 @@ export default function WorkerDashboard() {
   const fetchJobs = async (id: string) => {
     const { data } = await supabase
       .from('portal_milestones')
-      .select('id, title, description, payment_request, scheduled_at, worker_status, worker_note, photo_before_url, photo_after_url, client_portals(client_name, project_name, client_address)')
+      .select('id, title, description, payment_request, amount, payment_link, scheduled_at, worker_status, worker_note, photo_before_url, photo_after_url, client_portals(client_name, project_name, client_address)')
       .eq('assigned_worker_id', id)
       .order('scheduled_at', { ascending: true });
 
@@ -293,22 +295,47 @@ export default function WorkerDashboard() {
                       className="w-full border border-zinc-200 rounded-xl text-xs px-3 py-2 text-zinc-900 placeholder-zinc-400 focus:outline-none focus:border-zinc-900 transition resize-none"
                     />
 
-                    <div className="grid grid-cols-2 gap-2">
-                      <button
-                        onClick={() => handleAction(job.id, 'complete_paid')}
-                        disabled={submittingId === job.id}
-                        className="flex flex-col items-center justify-center gap-0.5 bg-zinc-900 text-white text-[10px] font-bold uppercase tracking-wider py-2.5 rounded-xl hover:bg-zinc-700 transition cursor-pointer disabled:opacity-50">
-                        <span className="flex items-center gap-1.5"><CheckCircle2 className="w-3.5 h-3.5" /> Complete</span>
-                        <span className="font-normal normal-case text-[9px] text-zinc-300">Payment collected</span>
-                      </button>
-                      <button
-                        onClick={() => handleAction(job.id, 'complete_awaiting_payment')}
-                        disabled={submittingId === job.id}
-                        className="flex flex-col items-center justify-center gap-0.5 border border-zinc-300 text-zinc-700 text-[10px] font-bold uppercase tracking-wider py-2.5 rounded-xl hover:bg-zinc-50 transition cursor-pointer disabled:opacity-50">
-                        <span className="flex items-center gap-1.5"><CheckCircle2 className="w-3.5 h-3.5" /> Complete</span>
-                        <span className="font-normal normal-case text-[9px] text-zinc-400">Awaiting online payment</span>
-                      </button>
-                    </div>
+                    {(() => {
+                      const hasPaymentLink = !!job.payment_link?.includes('http');
+                      const hasCashPayment = !!job.amount && !hasPaymentLink;
+                      const hasAmount = !!job.amount || hasPaymentLink;
+
+                      if (!hasAmount) {
+                        // No payment involved — single complete button
+                        return (
+                          <button
+                            onClick={() => handleAction(job.id, 'complete_paid')}
+                            disabled={submittingId === job.id}
+                            className="w-full flex items-center justify-center gap-1.5 bg-zinc-900 text-white text-[10px] font-bold uppercase tracking-wider py-2.5 rounded-xl hover:bg-zinc-700 transition cursor-pointer disabled:opacity-50">
+                            <CheckCircle2 className="w-3.5 h-3.5" /> Mark Complete
+                          </button>
+                        );
+                      }
+
+                      if (hasPaymentLink) {
+                        // Online payment link — awaiting payment
+                        return (
+                          <button
+                            onClick={() => handleAction(job.id, 'complete_awaiting_payment')}
+                            disabled={submittingId === job.id}
+                            className="w-full flex flex-col items-center justify-center gap-0.5 border border-zinc-300 text-zinc-700 text-[10px] font-bold uppercase tracking-wider py-2.5 rounded-xl hover:bg-zinc-50 transition cursor-pointer disabled:opacity-50">
+                            <span className="flex items-center gap-1.5"><CheckCircle2 className="w-3.5 h-3.5" /> Complete</span>
+                            <span className="font-normal normal-case text-[9px] text-zinc-400">Awaiting online payment</span>
+                          </button>
+                        );
+                      }
+
+                      // Cash/check payment
+                      return (
+                        <button
+                          onClick={() => handleAction(job.id, 'complete_paid')}
+                          disabled={submittingId === job.id}
+                          className="w-full flex flex-col items-center justify-center gap-0.5 bg-zinc-900 text-white text-[10px] font-bold uppercase tracking-wider py-2.5 rounded-xl hover:bg-zinc-700 transition cursor-pointer disabled:opacity-50">
+                          <span className="flex items-center gap-1.5"><CheckCircle2 className="w-3.5 h-3.5" /> Complete</span>
+                          <span className="font-normal normal-case text-[9px] text-zinc-300">Payment collected</span>
+                        </button>
+                      );
+                    })()}
                     <div className="grid grid-cols-2 gap-2">
                       <button
                         onClick={() => handleAction(job.id, 'no_show')}
