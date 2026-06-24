@@ -309,8 +309,8 @@ export default function WorkerDashboard() {
                     />
 
                     {/* Complete buttons — context aware */}
-                    {hasPaymentLink ? (
-                      // Online payment: show BOTH options since client may pay in person
+                    {(hasPaymentLink || hasCashPayment) ? (
+                      // Any payment context: show both options
                       <div className="grid grid-cols-2 gap-2">
                         <button onClick={() => handleAction(job.id, 'complete_paid')} disabled={submittingId === job.id}
                           className="flex flex-col items-center justify-center gap-0.5 bg-zinc-900 text-white text-[10px] font-bold uppercase tracking-wider py-2.5 rounded-xl hover:bg-zinc-700 transition cursor-pointer disabled:opacity-50">
@@ -323,15 +323,8 @@ export default function WorkerDashboard() {
                           <span className="font-normal normal-case text-[9px] text-zinc-400">Awaiting payment</span>
                         </button>
                       </div>
-                    ) : hasCashPayment ? (
-                      // Cash/check: single complete with payment collected
-                      <button onClick={() => handleAction(job.id, 'complete_paid')} disabled={submittingId === job.id}
-                        className="w-full flex flex-col items-center justify-center gap-0.5 bg-zinc-900 text-white text-[10px] font-bold uppercase tracking-wider py-2.5 rounded-xl hover:bg-zinc-700 transition cursor-pointer disabled:opacity-50">
-                        <span className="flex items-center gap-1.5"><CheckCircle2 className="w-3.5 h-3.5" /> Complete</span>
-                        <span className="font-normal normal-case text-[9px] text-zinc-300">Payment collected</span>
-                      </button>
                     ) : (
-                      // No payment: simple complete
+                      // No payment context: simple complete
                       <button onClick={() => handleAction(job.id, 'complete_paid')} disabled={submittingId === job.id}
                         className="w-full flex items-center justify-center gap-1.5 bg-zinc-900 text-white text-[10px] font-bold uppercase tracking-wider py-2.5 rounded-xl hover:bg-zinc-700 transition cursor-pointer disabled:opacity-50">
                         <CheckCircle2 className="w-3.5 h-3.5" /> Mark Complete
