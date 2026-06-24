@@ -5,7 +5,7 @@ import { supabase } from '@/lib/supabase';
 import { useRouter } from 'next/navigation';
 import { resolveWorkspaceAccess } from '@/lib/workspace';
 import {
-  LogOut, CheckCircle2, AlertTriangle, Clock, MapPin, DollarSign, Camera, Calendar,
+  LogOut, CheckCircle2, AlertTriangle, Clock, MapPin, DollarSign, Camera, Calendar, RotateCcw,
 } from 'lucide-react';
 
 interface PortalInfo {
@@ -26,6 +26,7 @@ interface Job {
   worker_note: string | null;
   photo_before_url: string | null;
   photo_after_url: string | null;
+  portal_id: string;
   client_portals: PortalInfo | PortalInfo[] | null;
 }
 
@@ -72,9 +73,9 @@ export default function WorkerDashboard() {
   const fetchJobs = async (id: string) => {
     const { data } = await supabase
       .from('portal_milestones')
-      .select('id, title, description, payment_request, amount, payment_link, scheduled_at, worker_status, worker_note, photo_before_url, photo_after_url, client_portals(client_name, project_name, client_address)')
+      .select('id, title, description, payment_request, amount, payment_link, scheduled_at, worker_status, worker_note, photo_before_url, photo_after_url, portal_id, client_portals(client_name, project_name, client_address)')
       .eq('assigned_worker_id', id)
-      .order('scheduled_at', { ascending: true });
+      .order('scheduled_at', { ascending: true, nullsFirst: false });
 
     setJobs((data || []) as unknown as Job[]);
   };
@@ -83,7 +84,7 @@ export default function WorkerDashboard() {
     if (workerId) await fetchJobs(workerId);
   };
 
-  const handleAction = async (jobId: string, action: 'complete_paid' | 'complete_awaiting_payment' | 'no_show' | 'reschedule_needed') => {
+  const handleAction = async (jobId: string, action: 'complete_paid' | 'complete_awaiting_payment' | 'no_show' | 'reschedule_needed' | 'undo') => {
     const note = noteDrafts[jobId]?.trim();
 
     if (action === 'no_show' || action === 'reschedule_needed') {
@@ -91,6 +92,10 @@ export default function WorkerDashboard() {
         ? 'Mark this job as a no-show? The manager will be notified immediately.'
         : 'Flag this job as needing a reschedule? The manager will be notified immediately.';
       if (!confirm(confirmMsg)) return;
+    }
+
+    if (action === 'undo') {
+      if (!confirm('Undo this completion? The manager will be notified. Job will return to active.')) return;
     }
 
     setSubmittingId(jobId);
@@ -203,14 +208,18 @@ export default function WorkerDashboard() {
 
       <main className="max-w-2xl mx-auto px-4 py-6 space-y-6">
         <section className="space-y-3">
-          <h2 className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">Upcoming &amp; Active <span className="normal-case font-medium text-zinc-300">· sorted by scheduled date</span></h2>
+          <h2 className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">
+            Upcoming &amp; Active <span className="normal-case font-medium text-zinc-300">· sorted by scheduled date</span>
+          </h2>
           {upcoming.length === 0 ? (
             <p className="text-xs text-zinc-400 italic border border-dashed border-zinc-300 rounded-2xl p-8 text-center">
               No jobs assigned right now.
             </p>
           ) : upcoming.map(job => {
             const portal = getPortalInfo(job.client_portals);
-            const hasOnlinePayment = !!job.payment_request?.includes('http');
+            const hasPaymentLink = !!job.payment_link?.includes('http');
+            const hasAmount = !!job.amount;
+            const hasCashPayment = hasAmount && !hasPaymentLink;
             const flagged = job.worker_status === 'issue_reported';
 
             return (
@@ -234,10 +243,14 @@ export default function WorkerDashboard() {
                   <p className="text-xs text-zinc-600 leading-relaxed">{job.description}</p>
                 )}
 
-                {job.payment_request && (
-                  <div className="text-[11px] font-medium text-amber-700 bg-amber-50 border border-amber-200 px-2.5 py-1.5 rounded-lg flex items-center gap-1.5 w-fit">
-                    <DollarSign className="w-3 h-3" />
-                    {hasOnlinePayment ? 'Online payment link on file (client pays via portal)' : job.payment_request}
+                {/* Payment info */}
+                {(hasAmount || hasPaymentLink) && (
+                  <div className="text-[11px] font-medium text-amber-700 bg-amber-50 border border-amber-200 px-2.5 py-1.5 rounded-lg flex items-center gap-1.5">
+                    <DollarSign className="w-3 h-3 shrink-0" />
+                    {hasPaymentLink
+                      ? `Online payment link on file${hasAmount ? ` — ${job.amount}` : ''} (client pays via portal)`
+                      : job.amount
+                    }
                   </div>
                 )}
 
@@ -295,57 +308,42 @@ export default function WorkerDashboard() {
                       className="w-full border border-zinc-200 rounded-xl text-xs px-3 py-2 text-zinc-900 placeholder-zinc-400 focus:outline-none focus:border-zinc-900 transition resize-none"
                     />
 
-                    {(() => {
-                      const hasPaymentLink = !!job.payment_link?.includes('http');
-                      const hasCashPayment = !!job.amount && !hasPaymentLink;
-                      const hasAmount = !!job.amount || hasPaymentLink;
-
-                      if (!hasAmount) {
-                        // No payment involved — single complete button
-                        return (
-                          <button
-                            onClick={() => handleAction(job.id, 'complete_paid')}
-                            disabled={submittingId === job.id}
-                            className="w-full flex items-center justify-center gap-1.5 bg-zinc-900 text-white text-[10px] font-bold uppercase tracking-wider py-2.5 rounded-xl hover:bg-zinc-700 transition cursor-pointer disabled:opacity-50">
-                            <CheckCircle2 className="w-3.5 h-3.5" /> Mark Complete
-                          </button>
-                        );
-                      }
-
-                      if (hasPaymentLink) {
-                        // Online payment link — awaiting payment
-                        return (
-                          <button
-                            onClick={() => handleAction(job.id, 'complete_awaiting_payment')}
-                            disabled={submittingId === job.id}
-                            className="w-full flex flex-col items-center justify-center gap-0.5 border border-zinc-300 text-zinc-700 text-[10px] font-bold uppercase tracking-wider py-2.5 rounded-xl hover:bg-zinc-50 transition cursor-pointer disabled:opacity-50">
-                            <span className="flex items-center gap-1.5"><CheckCircle2 className="w-3.5 h-3.5" /> Complete</span>
-                            <span className="font-normal normal-case text-[9px] text-zinc-400">Awaiting online payment</span>
-                          </button>
-                        );
-                      }
-
-                      // Cash/check payment
-                      return (
-                        <button
-                          onClick={() => handleAction(job.id, 'complete_paid')}
-                          disabled={submittingId === job.id}
-                          className="w-full flex flex-col items-center justify-center gap-0.5 bg-zinc-900 text-white text-[10px] font-bold uppercase tracking-wider py-2.5 rounded-xl hover:bg-zinc-700 transition cursor-pointer disabled:opacity-50">
-                          <span className="flex items-center gap-1.5"><CheckCircle2 className="w-3.5 h-3.5" /> Complete</span>
+                    {/* Complete buttons — context aware */}
+                    {hasPaymentLink ? (
+                      // Online payment: show BOTH options since client may pay in person
+                      <div className="grid grid-cols-2 gap-2">
+                        <button onClick={() => handleAction(job.id, 'complete_paid')} disabled={submittingId === job.id}
+                          className="flex flex-col items-center justify-center gap-0.5 bg-zinc-900 text-white text-[10px] font-bold uppercase tracking-wider py-2.5 rounded-xl hover:bg-zinc-700 transition cursor-pointer disabled:opacity-50">
+                          <span className="flex items-center gap-1"><CheckCircle2 className="w-3.5 h-3.5" /> Complete</span>
                           <span className="font-normal normal-case text-[9px] text-zinc-300">Payment collected</span>
                         </button>
-                      );
-                    })()}
+                        <button onClick={() => handleAction(job.id, 'complete_awaiting_payment')} disabled={submittingId === job.id}
+                          className="flex flex-col items-center justify-center gap-0.5 border border-zinc-300 text-zinc-700 text-[10px] font-bold uppercase tracking-wider py-2.5 rounded-xl hover:bg-zinc-50 transition cursor-pointer disabled:opacity-50">
+                          <span className="flex items-center gap-1"><CheckCircle2 className="w-3.5 h-3.5" /> Complete</span>
+                          <span className="font-normal normal-case text-[9px] text-zinc-400">Awaiting payment</span>
+                        </button>
+                      </div>
+                    ) : hasCashPayment ? (
+                      // Cash/check: single complete with payment collected
+                      <button onClick={() => handleAction(job.id, 'complete_paid')} disabled={submittingId === job.id}
+                        className="w-full flex flex-col items-center justify-center gap-0.5 bg-zinc-900 text-white text-[10px] font-bold uppercase tracking-wider py-2.5 rounded-xl hover:bg-zinc-700 transition cursor-pointer disabled:opacity-50">
+                        <span className="flex items-center gap-1.5"><CheckCircle2 className="w-3.5 h-3.5" /> Complete</span>
+                        <span className="font-normal normal-case text-[9px] text-zinc-300">Payment collected</span>
+                      </button>
+                    ) : (
+                      // No payment: simple complete
+                      <button onClick={() => handleAction(job.id, 'complete_paid')} disabled={submittingId === job.id}
+                        className="w-full flex items-center justify-center gap-1.5 bg-zinc-900 text-white text-[10px] font-bold uppercase tracking-wider py-2.5 rounded-xl hover:bg-zinc-700 transition cursor-pointer disabled:opacity-50">
+                        <CheckCircle2 className="w-3.5 h-3.5" /> Mark Complete
+                      </button>
+                    )}
+
                     <div className="grid grid-cols-2 gap-2">
-                      <button
-                        onClick={() => handleAction(job.id, 'no_show')}
-                        disabled={submittingId === job.id}
+                      <button onClick={() => handleAction(job.id, 'no_show')} disabled={submittingId === job.id}
                         className="flex items-center justify-center gap-1.5 border border-rose-200 text-rose-600 text-[10px] font-bold uppercase tracking-wider py-2.5 rounded-xl hover:bg-rose-50 transition cursor-pointer disabled:opacity-50">
                         No Show
                       </button>
-                      <button
-                        onClick={() => handleAction(job.id, 'reschedule_needed')}
-                        disabled={submittingId === job.id}
+                      <button onClick={() => handleAction(job.id, 'reschedule_needed')} disabled={submittingId === job.id}
                         className="flex items-center justify-center gap-1.5 border border-amber-200 text-amber-600 text-[10px] font-bold uppercase tracking-wider py-2.5 rounded-xl hover:bg-amber-50 transition cursor-pointer disabled:opacity-50">
                         Reschedule
                       </button>
@@ -363,18 +361,29 @@ export default function WorkerDashboard() {
             {history.map(job => {
               const portal = getPortalInfo(job.client_portals);
               return (
-                <div key={job.id} className="p-3 rounded-xl border border-zinc-200 bg-white flex items-center justify-between gap-3 opacity-70">
-                  <div>
-                    <p className="text-xs font-bold text-zinc-900">{job.title}</p>
-                    <p className="text-[10px] text-zinc-400">{portal?.client_name} — {portal?.project_name}</p>
+                <div key={job.id} className="p-3 rounded-xl border border-zinc-200 bg-white">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-xs font-bold text-zinc-900 truncate">{job.title}</p>
+                      <p className="text-[10px] text-zinc-400 truncate">{portal?.client_name} — {portal?.project_name}</p>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className={`text-[9px] font-bold uppercase tracking-wider px-2 py-1 rounded-lg ${
+                        job.worker_status === 'completed'
+                          ? 'bg-emerald-50 text-emerald-600 border border-emerald-100'
+                          : 'bg-rose-50 text-rose-600 border border-rose-100'
+                      }`}>
+                        {job.worker_status === 'completed' ? 'Completed' : 'No Show'}
+                      </span>
+                      <button
+                        onClick={() => handleAction(job.id, 'undo')}
+                        disabled={submittingId === job.id}
+                        title="Undo — resets job to active"
+                        className="p-1.5 text-zinc-300 hover:text-zinc-600 hover:bg-zinc-100 rounded-lg transition cursor-pointer disabled:opacity-40">
+                        <RotateCcw className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                   </div>
-                  <span className={`text-[9px] font-bold uppercase tracking-wider px-2 py-1 rounded-lg shrink-0 ${
-                    job.worker_status === 'completed'
-                      ? 'bg-emerald-50 text-emerald-600 border border-emerald-100'
-                      : 'bg-rose-50 text-rose-600 border border-rose-100'
-                  }`}>
-                    {job.worker_status === 'completed' ? 'Completed' : 'No Show'}
-                  </span>
                 </div>
               );
             })}
