@@ -132,12 +132,18 @@ function CustomPicker({ date, time, onDateChange, onTimeChange, onClear }: DateT
                 );
               })}
             </div>
-            {date && onClear && (
-              <button type="button" onClick={() => { onClear(); setShowCalendar(false); }}
-                className="w-full mt-2 text-[10px] font-bold uppercase tracking-wider text-zinc-400 hover:text-red-500 transition cursor-pointer pt-2 border-t border-zinc-100">
-                Clear date
+            <div className="flex items-center justify-between mt-2 pt-2 border-t border-zinc-100">
+              {date && onClear ? (
+                <button type="button" onClick={() => { onClear(); setShowCalendar(false); }}
+                  className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 hover:text-red-500 transition cursor-pointer">
+                  Clear
+                </button>
+              ) : <span />}
+              <button type="button" onClick={() => setShowCalendar(false)}
+                className="text-[10px] font-bold uppercase tracking-wider bg-zinc-900 text-white px-3 py-1.5 rounded-lg cursor-pointer hover:bg-zinc-700 transition">
+                Done
               </button>
-            )}
+            </div>
           </div>
         )}
       </div>
@@ -171,15 +177,19 @@ function CustomPicker({ date, time, onDateChange, onTimeChange, onClear }: DateT
               ))}
             </div>
             <div className="grid grid-cols-2 gap-1">
-              {['AM', 'PM'].map(ap => (
-                <button type="button" key={ap} onClick={() => setTimePart(hour, minute, ap)}
-                  className={`py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${ampm === ap ? 'bg-zinc-900 text-white' : 'hover:bg-zinc-100 text-zinc-700'}`}>
-                  {ap}
-                </button>
-              ))}
+                {['AM', 'PM'].map(ap => (
+                  <button type="button" key={ap} onClick={() => setTimePart(hour, minute, ap)}
+                    className={`py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${ampm === ap ? 'bg-zinc-900 text-white' : 'hover:bg-zinc-100 text-zinc-700'}`}>
+                    {ap}
+                  </button>
+                ))}
+              </div>
+              <button type="button" onClick={() => setShowTimePicker(false)}
+                className="w-full mt-2 text-[10px] font-bold uppercase tracking-wider bg-zinc-900 text-white py-1.5 rounded-lg cursor-pointer hover:bg-zinc-700 transition">
+                Done
+              </button>
             </div>
-          </div>
-        )}
+          )}
       </div>
     </div>
   );
