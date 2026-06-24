@@ -33,6 +33,9 @@ export async function POST(req: Request) {
       proposal_declined: `❌ Proposal declined by ${clientName}`,
       job_no_show: `🚫 Worker reported a no-show — ${projectName}`,
       job_reschedule_requested: `🔄 Worker requested a reschedule — ${projectName}`,
+      job_completed_paid: `✅ Job completed, payment collected — ${projectName}`,
+      job_completed_awaiting_payment: `✅ Job completed, awaiting client payment — ${projectName}`,
+      job_completion_undone: `↩️ Worker undid job completion — ${projectName}`,
     };
 
     const actionLines: Record<string, string> = {
@@ -41,7 +44,10 @@ export async function POST(req: Request) {
       proposal_declined: `${clientName} has <strong>declined</strong> your proposal on <strong>${projectName}</strong>.`,
       job_no_show: `A scheduled job on <strong>${projectName}</strong> was marked as a <strong>no-show</strong> by the assigned worker.`,
       job_reschedule_requested: `The assigned worker has requested a <strong>reschedule</strong> for a job on <strong>${projectName}</strong>.`,
-    };
+      job_completed_paid: `A job has been <strong>completed</strong> on <strong>${projectName}</strong> and payment was collected on-site.`,
+      job_completed_awaiting_payment: `A job has been <strong>completed</strong> on <strong>${projectName}</strong>. The client still needs to complete their online payment.`,
+      job_completion_undone: `A worker has <strong>undone a job completion</strong> on <strong>${projectName}</strong>. The job has been reset to active.`,
+    };  
 
     const emailHtml = `
       <div style="background:#09090b;color:#f4f4f5;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;padding:40px;border-radius:16px;max-width:600px;margin:0 auto;border:1px solid #27272a;">
