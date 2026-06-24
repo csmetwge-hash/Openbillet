@@ -1,0 +1,14 @@
+User-agent: *
+Allow: /
+Allow: /pricing
+Allow: /auth
+
+Disallow: /admin
+Disallow: /dashboard
+Disallow: /worker
+Disallow: /settings
+Disallow: /billing
+Disallow: /api/
+Disallow: /portal/
+
+Sitemap: https://openbillet.com/sitemap.xml
