@@ -63,7 +63,11 @@ export async function POST(req: Request) {
     let update: Record<string, any> = {};
     let notifyType: string | null = null;
 
-    if (action === 'complete_paid') {
+    if (action === 'undo') {
+      update = { worker_status: null, status: 'incomplete', worker_note: null };
+      notifyType = 'job_completion_undone';
+
+    } else if (action === 'complete_paid') {
       update = { worker_status: 'completed', worker_note: null, status: 'completed' };
       if (photoBeforeUrl) update.photo_before_url = photoBeforeUrl;
       if (photoAfterUrl) update.photo_after_url = photoAfterUrl;
@@ -101,30 +105,37 @@ export async function POST(req: Request) {
 
     if (updateErr) throw updateErr;
 
-    // Route notification to correct recipient
+    // Send notifications
     if (notifyType) {
       try {
-        const isClientNotify = notifyType === 'job_completed_paid' || notifyType === 'job_completed_awaiting_payment';
-        const endpoint = isClientNotify ? '/api/notify-client' : '/api/notify-admin';
-        const body = isClientNotify
-          ? {
+        const isCompletion = notifyType === 'job_completed_paid' || notifyType === 'job_completed_awaiting_payment';
+        const isUndo = notifyType === 'job_completion_undone';
+
+        // Always notify manager
+        await fetch(`${process.env.NEXT_PUBLIC_APP_URL}/api/notify-admin`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            portalId: milestone.portal_id,
+            actionType: notifyType,
+            clientName: portalInfo?.client_name,
+            projectName: portalInfo?.project_name,
+            detail: `${milestone.title}${note ? ` — Note: ${note}` : ''}`,
+          }),
+        });
+
+        // Also notify client on completion (not on undo)
+        if (isCompletion) {
+          await fetch(`${process.env.NEXT_PUBLIC_APP_URL}/api/notify-client`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
               portalId: milestone.portal_id,
               actionType: notifyType,
               detail: milestone.title,
-            }
-          : {
-              portalId: milestone.portal_id,
-              actionType: notifyType,
-              clientName: portalInfo?.client_name,
-              projectName: portalInfo?.project_name,
-              detail: `${milestone.title}${note ? ` — Note: ${note}` : ''}`,
-            };
-
-        await fetch(`${process.env.NEXT_PUBLIC_APP_URL}${endpoint}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(body),
-        });
+            }),
+          });
+        }
       } catch (notifyErr) {
         console.error('Failed to send notification:', notifyErr);
       }
