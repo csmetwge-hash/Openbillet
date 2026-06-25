@@ -65,12 +65,20 @@ export async function POST() {
       });
 
     if (error) {
-      // Race condition: another concurrent call already created this record.
-      // That's fine — the trial record exists either way.
       if (error.code === '23505') {
         return NextResponse.json({ success: true, alreadyExists: true });
       }
       throw error;
+    }
+
+    // Fire welcome email for new accounts (non-blocking)
+    try {
+      await fetch(`${process.env.NEXT_PUBLIC_APP_URL}/api/send-welcome`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+    } catch (emailErr) {
+      console.error('Welcome email failed:', emailErr);
     }
 
     return NextResponse.json({ success: true, trialEnds: trialEnds.toISOString() });
