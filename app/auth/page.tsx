@@ -42,6 +42,7 @@ function AuthContent() {
       if (!error) {
         if (data.session) {
           await fetch('/api/start-trial', { method: 'POST' });
+          await fetch('/api/send-welcome', { method: 'POST' });
           router.push('/dashboard');
         } else {
           setEmail('');

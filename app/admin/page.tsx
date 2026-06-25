@@ -170,6 +170,7 @@ export default function AdminPage() {
       .select('id, title, scheduled_at, worker_status, worker_note, portal_id, client_portals(client_name, project_name), team_members(member_email)')
       .in('portal_id', portalIds)
       .not('scheduled_at', 'is', null)
+      .neq('status', 'completed')
       .order('scheduled_at', { ascending: true });
     setScheduledJobs((data || []) as unknown as ScheduledJob[]);
   };

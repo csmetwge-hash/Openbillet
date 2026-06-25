@@ -25,8 +25,14 @@ function AcceptInviteContent() {
   const checkAuth = async () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (user) {
-      // Already logged in — try to accept immediately
-      await acceptInvite();
+      // If logged in as the correct email, accept immediately
+      if (user.email?.toLowerCase() === email?.toLowerCase()) {
+        await acceptInvite();
+      } else {
+        // Wrong account is logged in — sign out and show the auth form
+        await supabase.auth.signOut();
+        setStatus('needs_auth');
+      }
     } else {
       setStatus('needs_auth');
     }
