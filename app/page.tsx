@@ -357,9 +357,12 @@ export default function LandingPage() {
             <span className="text-xs font-black uppercase text-zinc-500">OpenBillet</span>
           </div>
           <p className="text-[10px] font-mono text-zinc-600">&copy; 2026 OpenBillet. All rights reserved.</p>
-          <div className="flex gap-4">
+          <div className="flex gap-4 flex-wrap justify-center">
             <Link href="/pricing" className="text-[10px] font-mono text-zinc-600 hover:text-zinc-400 transition">Pricing</Link>
             <Link href="/auth" className="text-[10px] font-mono text-zinc-600 hover:text-zinc-400 transition">Sign In</Link>
+            <Link href="/contact" className="text-[10px] font-mono text-zinc-600 hover:text-zinc-400 transition">Contact</Link>
+            <Link href="/privacy" className="text-[10px] font-mono text-zinc-600 hover:text-zinc-400 transition">Privacy</Link>
+            <Link href="/terms" className="text-[10px] font-mono text-zinc-600 hover:text-zinc-400 transition">Terms</Link>
           </div>
         </div>
       </footer>
