@@ -36,8 +36,8 @@ export async function POST(req: Request) {
       job_completed_paid: `✅ Job completed, payment collected — ${projectName}`,
       job_completed_awaiting_payment: `✅ Job completed, awaiting client payment — ${projectName}`,
       job_completion_undone: `↩️ Worker undid job completion — ${projectName}`,
+      client_action_completed: `✅ Client completed a required action — ${projectName}`,
     };
-
     const actionLines: Record<string, string> = {
       message: `${clientName} sent you a new message on <strong>${projectName}</strong>:`,
       proposal_accepted: `${clientName} has <strong>accepted</strong> your proposal on <strong>${projectName}</strong>.`,
@@ -47,6 +47,7 @@ export async function POST(req: Request) {
       job_completed_paid: `A job has been <strong>completed</strong> on <strong>${projectName}</strong> and payment was collected on-site.`,
       job_completed_awaiting_payment: `A job has been <strong>completed</strong> on <strong>${projectName}</strong>. The client still needs to complete their online payment.`,
       job_completion_undone: `A worker has <strong>undone a job completion</strong> on <strong>${projectName}</strong>. The job has been reset to active.`,
+      client_action_completed: `Your client has <strong>completed a required action</strong> on <strong>${projectName}</strong>${detail ? `: ${detail}` : ''}.`,
     };  
 
     const emailHtml = `
