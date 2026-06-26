@@ -27,6 +27,7 @@ interface Milestone {
   payment_link?: string;
   status: string;
   responsibility: string;
+  client_action_needed?: string | null;
   photo_before_url?: string;
   photo_after_url?: string;
 }
@@ -163,10 +164,13 @@ export default function ClientPortal({ params }: { params: Promise<{ token: stri
   };
 
   const toggleClientMilestone = async (m: Milestone) => {
-    if (m.responsibility !== 'client') return;
+    if (!m.client_action_needed) return;
     const newStatus = m.status === 'completed' ? 'incomplete' : 'completed';
     await supabase.from('portal_milestones').update({ status: newStatus }).eq('id', m.id);
     setMilestones(prev => prev.map(ms => ms.id === m.id ? { ...ms, status: newStatus } : ms));
+    if (newStatus === 'completed') {
+      notifyAdmin('client_action_completed', `${m.title} — ${m.client_action_needed}`);
+    }
   };
 
   const getFileUrl = (path: string) => {
@@ -297,12 +301,12 @@ export default function ClientPortal({ params }: { params: Promise<{ token: stri
               <div key={m.id} className={`bg-white rounded-2xl border overflow-hidden transition ${m.status === 'completed' ? 'border-zinc-100 opacity-80' : 'border-zinc-200'}`}>
                 <div className="p-4">
                   <div className="flex items-start gap-3">
-                    {m.responsibility === 'client' && m.status !== 'completed' ? (
+                    {m.client_action_needed && m.status !== 'completed' ? (
                       <button onClick={() => toggleClientMilestone(m)}
-                        className="shrink-0 mt-0.5 w-5 h-5 rounded-full border-2 border-zinc-400 hover:border-zinc-700 hover:bg-zinc-100 transition cursor-pointer" />
+                        className="shrink-0 mt-0.5 w-5 h-5 rounded-full border-2 border-amber-400 hover:border-amber-600 hover:bg-amber-50 transition cursor-pointer" />
                     ) : m.status === 'completed' ? (
-                      m.responsibility === 'client' ? (
-                        <button onClick={() => toggleClientMilestone(m)} className="shrink-0 mt-0.5 cursor-pointer">
+                      m.client_action_needed ? (
+                        <button onClick={() => toggleClientMilestone(m)} className="shrink-0 mt-0.5 cursor-pointer" title="Tap to undo">
                           <CheckCircle2 className="w-5 h-5 text-emerald-500" />
                         </button>
                       ) : <CheckCircle2 className="w-5 h-5 text-emerald-500 shrink-0 mt-0.5" />
@@ -322,8 +326,14 @@ export default function ClientPortal({ params }: { params: Promise<{ token: stri
                         }`}>{m.status.replace('_', ' ')}</span>
                       </div>
                       {m.description && <p className="text-xs text-zinc-500 mt-1 leading-relaxed">{m.description}</p>}
-                      {m.responsibility === 'client' && m.status !== 'completed' && (
-                        <p className="text-[11px] text-amber-600 font-semibold mt-1">Action required — tap to mark complete</p>
+                      {m.client_action_needed && m.status !== 'completed' && (
+                        <div className="mt-1.5 flex items-center gap-1.5">
+                          <span className="text-[11px] text-amber-600 font-semibold">Action needed:</span>
+                          <span className="text-[11px] text-amber-700">{m.client_action_needed}</span>
+                        </div>
+                      )}
+                      {m.client_action_needed && m.status !== 'completed' && (
+                        <p className="text-[10px] text-zinc-400 mt-0.5">Tap the circle to mark as done</p>
                       )}
                       {m.amount && m.payment_link && (
                         <div className="mt-3 flex items-center gap-3 flex-wrap">
