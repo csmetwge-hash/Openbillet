@@ -34,6 +34,7 @@ export async function POST(req: Request) {
       job_no_show: `🚫 Worker reported a no-show — ${projectName}`,
       job_reschedule_requested: `🔄 Worker requested a reschedule — ${projectName}`,
       job_completed_paid: `✅ Job completed, payment collected — ${projectName}`,
+      job_completed_no_payment: `✅ Job completed — ${projectName}`,
       job_completed_awaiting_payment: `✅ Job completed, awaiting client payment — ${projectName}`,
       job_completion_undone: `↩️ Worker undid job completion — ${projectName}`,
       client_action_completed: `✅ Client completed a required action — ${projectName}`,
@@ -45,7 +46,7 @@ export async function POST(req: Request) {
       job_no_show: `A scheduled job on <strong>${projectName}</strong> was marked as a <strong>no-show</strong> by the assigned worker.`,
       job_reschedule_requested: `The assigned worker has requested a <strong>reschedule</strong> for a job on <strong>${projectName}</strong>.`,
       job_completed_paid: `A job has been <strong>completed</strong> on <strong>${projectName}</strong> and payment was collected on-site.`,
-      job_completed_awaiting_payment: `A job has been <strong>completed</strong> on <strong>${projectName}</strong>. The client still needs to complete their online payment.`,
+      job_completed_no_payment: `A job has been <strong>completed</strong> on <strong>${projectName}</strong>.`,
       job_completion_undone: `A worker has <strong>undone a job completion</strong> on <strong>${projectName}</strong>. The job has been reset to active.`,
       client_action_completed: `Your client has <strong>completed a required action</strong> on <strong>${projectName}</strong>${detail ? `: ${detail}` : ''}.`,
     };  

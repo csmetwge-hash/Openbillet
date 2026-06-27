@@ -46,7 +46,7 @@ export async function POST(req: Request) {
     // Verify this job is actually assigned to this worker
     const { data: milestone, error: msErr } = await supabaseAdmin
       .from('portal_milestones')
-      .select('id, title, payment_request, payment_link, assigned_worker_id, portal_id, client_portals(client_name, project_name, user_id)')
+      .select('id, title, amount, payment_request, payment_link, assigned_worker_id, portal_id, client_portals(client_name, project_name, user_id)')
       .eq('id', milestoneId)
       .maybeSingle();
 
@@ -71,7 +71,8 @@ export async function POST(req: Request) {
       update = { worker_status: 'completed', worker_note: null, status: 'completed' };
       if (photoBeforeUrl) update.photo_before_url = photoBeforeUrl;
       if (photoAfterUrl) update.photo_after_url = photoAfterUrl;
-      notifyType = 'job_completed_paid';
+      const hasPayment = !!(milestone.amount || milestone.payment_link);
+      notifyType = hasPayment ? 'job_completed_paid' : 'job_completed_no_payment';
 
     } else if (action === 'complete_awaiting_payment') {
       update = { worker_status: 'completed', worker_note: null };
@@ -108,7 +109,6 @@ export async function POST(req: Request) {
     // Send notifications
     if (notifyType) {
       try {
-        const isCompletion = notifyType === 'job_completed_paid' || notifyType === 'job_completed_awaiting_payment';
         const isUndo = notifyType === 'job_completion_undone';
 
         // Always notify manager
@@ -124,8 +124,9 @@ export async function POST(req: Request) {
           }),
         });
 
-        // Also notify client on completion (not on undo)
-        if (isCompletion) {
+        // Also notify client on completion with payment (not on undo, not on no-payment completion)
+        const isCompletion = notifyType === 'job_completed_paid' || notifyType === 'job_completed_awaiting_payment';
+        if (isCompletion && notifyType !== 'job_completed_no_payment') {
           await fetch(`${process.env.NEXT_PUBLIC_APP_URL}/api/notify-client`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
