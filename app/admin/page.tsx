@@ -31,6 +31,7 @@ interface Milestone {
   amount?: string;
   payment_link?: string;
   status: string;
+  worker_status?: string | null;
   client_action_needed?: string;
   scheduled_at?: string | null;
   assigned_worker_id?: string | null;
@@ -609,6 +610,11 @@ export default function AdminPage() {
                                         </span>
                                       )}
                                     </div>
+                                    {m.worker_status === 'completed' && m.status !== 'completed' && (
+                                      <div className="mt-1 text-[10px] font-bold text-blue-600 bg-blue-50 border border-blue-100 px-2 py-1 rounded-lg flex items-center gap-1">
+                                        <CheckCircle2 className="w-3 h-3" /> Worker marked complete — awaiting your payment confirmation
+                                      </div>
+                                    )}
                                   </div>
                                   <select
                                     value={m.status}
