@@ -52,19 +52,21 @@ export async function POST(req: Request) {
 
     const emailHtml = `
       <div style="background:#09090b;color:#f4f4f5;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;padding:40px;border-radius:16px;max-width:600px;margin:0 auto;border:1px solid #27272a;">
-        <p style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.12em;color:#71717a;margin:0 0 4px;">OpenBillet · Client Activity</p>
-        <h2 style="font-size:18px;font-weight:900;color:#ffffff;margin:0 0 20px;">${projectName}</h2>
+        <p style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.12em;color:#71717a;margin:0 0 4px;">OpenBillet · Activity Alert</p>
+        <h2 style="font-size:18px;font-weight:900;color:#ffffff;margin:0 0 8px;">${subjects[actionType] || `New activity`}</h2>
+        <p style="font-size:12px;color:#71717a;margin:0 0 20px;">Portal: <strong style="color:#a1a1aa;">${projectName}</strong> · Client: <strong style="color:#a1a1aa;">${clientName}</strong></p>
         <p style="font-size:14px;color:#d4d4d8;line-height:1.7;margin:0 0 16px;">${actionLines[actionType]}</p>
         ${detail ? `
         <div style="background:#27272a;border-left:3px solid #52525b;padding:14px 16px;border-radius:8px;margin:0 0 24px;">
+          <p style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#71717a;margin:0 0 6px;">Details</p>
           <p style="font-size:14px;color:#f4f4f5;margin:0;line-height:1.6;">${detail}</p>
         </div>
         ` : ''}
-        <a href="${process.env.NEXT_PUBLIC_APP_URL}/dashboard" style="display:inline-block;background:#ffffff;color:#09090b;padding:12px 24px;border-radius:10px;font-weight:700;text-decoration:none;font-size:13px;">
-          Open Dashboard →
+        <a href="${process.env.NEXT_PUBLIC_APP_URL}/admin" style="display:inline-block;background:#ffffff;color:#09090b;padding:12px 24px;border-radius:10px;font-weight:700;text-decoration:none;font-size:13px;">
+          Open Control Center →
         </a>
         <hr style="border:0;border-top:1px solid #27272a;margin:32px 0 16px;" />
-        <p style="font-size:11px;color:#52525b;margin:0;">You're receiving this because a client took action on your OpenBillet portal.</p>
+        <p style="font-size:11px;color:#52525b;margin:0;">OpenBillet · openbillet.com</p>
       </div>
     `;
 

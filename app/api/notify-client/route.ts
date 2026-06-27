@@ -64,8 +64,8 @@ export async function POST(req: Request) {
     const emailHtml = `
       <div style="background:#09090b;color:#f4f4f5;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;padding:40px;border-radius:16px;max-width:600px;margin:0 auto;border:1px solid #27272a;">
         <p style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.12em;color:#71717a;margin:0 0 4px;">${brandName} · Project Update</p>
-        <h2 style="font-size:18px;font-weight:900;color:#ffffff;margin:0 0 20px;">${portal.project_name}</h2>
-        <p style="font-size:14px;color:#d4d4d8;line-height:1.7;margin:0 0 24px;">Hello ${portal.client_name},</p>
+        <h2 style="font-size:18px;font-weight:900;color:#ffffff;margin:0 0 4px;">${portal.project_name}</h2>
+        <p style="font-size:12px;color:#71717a;margin:0 0 20px;">Client: ${portal.client_name}</p>
         <p style="font-size:14px;color:#d4d4d8;line-height:1.7;margin:0 0 24px;">${bodyLine}</p>
         <a href="${portalUrl}" style="display:inline-block;background:#ffffff;color:#09090b;padding:14px 28px;border-radius:10px;font-weight:700;text-decoration:none;font-size:13px;">
           View Your Portal →
