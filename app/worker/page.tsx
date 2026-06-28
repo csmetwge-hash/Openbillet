@@ -12,6 +12,7 @@ interface PortalInfo {
   client_name: string;
   project_name: string;
   client_address: string | null;
+  client_phone: string | null;
 }
 
 interface Job {
@@ -73,7 +74,7 @@ export default function WorkerDashboard() {
   const fetchJobs = async (id: string) => {
     const { data } = await supabase
       .from('portal_milestones')
-      .select('id, title, description, payment_request, amount, payment_link, scheduled_at, worker_status, worker_note, photo_before_url, photo_after_url, portal_id, client_portals(client_name, project_name, client_address)')
+      .select('id, title, description, payment_request, amount, payment_link, scheduled_at, worker_status, worker_note, photo_before_url, photo_after_url, portal_id, client_portals(client_name, project_name, client_address, client_phone)')
       .eq('assigned_worker_id', id)
       .order('scheduled_at', { ascending: true, nullsFirst: false });
 
@@ -231,6 +232,11 @@ export default function WorkerDashboard() {
                     {portal?.client_address && (
                       <p className="text-[11px] text-zinc-400 mt-1 flex items-center gap-1">
                         <MapPin className="w-3 h-3" /> {portal.client_address}
+                      </p>
+                    )}
+                    {portal?.client_phone && (
+                      <p className="text-[11px] text-zinc-400 mt-0.5 flex items-center gap-1">
+                        <span className="text-zinc-300">📞</span> {portal.client_phone}
                       </p>
                     )}
                   </div>
