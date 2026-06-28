@@ -5,7 +5,8 @@ const resend = new Resend(process.env.RESEND_API_KEY);
 
 export async function POST(req: Request) {
   try {
-    const { workerEmail, jobTitle, scheduledAt, clientName, projectName } = await req.json();
+    const { workerEmail, jobTitle, scheduledAt, clientName, projectName, type } = await req.json();
+    const isAssignment = type === 'assignment' || !scheduledAt;
 
     if (!workerEmail || !jobTitle || !scheduledAt) {
       return NextResponse.json({ error: 'Missing required fields.' }, { status: 400 });
@@ -14,8 +15,6 @@ export async function POST(req: Request) {
     const formattedTime = scheduledAt ? new Date(scheduledAt).toLocaleString(undefined, {
       weekday: 'long', month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit',
     }) : null;
-
-    const isAssignment = !scheduledAt;
 
     const emailHtml = `
       <div style="background:#09090b;color:#f4f4f5;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;padding:40px;border-radius:16px;max-width:600px;margin:0 auto;border:1px solid #27272a;">
@@ -42,7 +41,7 @@ export async function POST(req: Request) {
     await resend.emails.send({
       from: 'OpenBillet Notifications <notifications@openbillet.com>',
       to: workerEmail,
-      subject: `Job rescheduled: ${jobTitle}`,
+      subject: isAssignment ? `New job assigned: ${jobTitle}` : `Job rescheduled: ${jobTitle}`,
       html: emailHtml,
     });
 
