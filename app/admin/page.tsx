@@ -336,6 +336,7 @@ export default function AdminPage() {
               scheduledAt: editScheduleDate ? new Date(`${editScheduleDate}T${editScheduleTime || '00:00'}`).toISOString() : null,
               clientName: portals.find(p => p.id === portalId)?.client_name,
               projectName: portals.find(p => p.id === portalId)?.project_name,
+              type: 'assignment',
             }),
           });
         } catch (err) { console.error('Worker assignment notify failed:', err); }
