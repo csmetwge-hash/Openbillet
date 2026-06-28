@@ -296,6 +296,14 @@ export default function AdminPage() {
     }
   };
 
+  const deleteMilestoneFromCard = async (portalId: string, milestoneId: string, title: string) => {
+    if (!confirm(`Delete "${title}"? This cannot be undone.`)) return;
+    await supabase.from('portal_milestones').delete().eq('id', milestoneId);
+    await refreshPortalMilestones(portalId);
+    fetchScheduledJobs(portals.map(p => p.id));
+    setEditingMilestone(null);
+  };
+
   const saveMilestoneEdit = async () => {
     if (!editingMilestone) return;
     setSavingMilestone(true);
@@ -311,6 +319,28 @@ export default function AdminPage() {
     }).eq('id', milestone.id);
     await refreshPortalMilestones(portalId);
     fetchScheduledJobs(portals.map(p => p.id));
+
+    // Notify worker if assigned
+    const hadWorker = editingMilestone.milestone.assigned_worker_id;
+    const newWorker = milestone.assigned_worker_id;
+    if (newWorker && newWorker !== hadWorker) {
+      const assignedWorker = workers.find(w => w.id === newWorker);
+      if (assignedWorker?.member_email) {
+        try {
+          await fetch('/api/notify-worker', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              workerEmail: assignedWorker.member_email,
+              jobTitle: milestone.title,
+              scheduledAt: editScheduleDate ? new Date(`${editScheduleDate}T${editScheduleTime || '00:00'}`).toISOString() : null,
+              clientName: portals.find(p => p.id === portalId)?.client_name,
+              projectName: portals.find(p => p.id === portalId)?.project_name,
+            }),
+          });
+        } catch (err) { console.error('Worker assignment notify failed:', err); }
+      }
+    }
 
     // Notify client if a schedule date was set
     const hadDate = !!editingMilestone.milestone.scheduled_at;
@@ -778,6 +808,11 @@ export default function AdminPage() {
               <button onClick={saveMilestoneEdit} disabled={savingMilestone || !editingMilestone.milestone.title.trim()}
                 className="w-full bg-zinc-900 text-white py-3 rounded-xl text-sm font-bold hover:bg-zinc-700 transition cursor-pointer disabled:opacity-40 flex items-center justify-center gap-2">
                 <Save className="w-4 h-4" /> {savingMilestone ? 'Saving...' : 'Save Changes'}
+              </button>
+              <button
+                onClick={() => deleteMilestoneFromCard(editingMilestone.portalId, editingMilestone.milestone.id, editingMilestone.milestone.title)}
+                className="w-full border border-rose-200 text-rose-500 py-2.5 rounded-xl text-sm font-bold hover:bg-rose-50 transition cursor-pointer flex items-center justify-center gap-2">
+                <X className="w-4 h-4" /> Delete Milestone
               </button>
             </div>
           </div>
