@@ -298,12 +298,13 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
-                workerEmail: assignedWorker.member_email,
-                jobTitle: milestoneForm.title,
-                scheduledAt: formScheduleDate ? new Date(`${formScheduleDate}T${formScheduleTime || '00:00'}`).toISOString() : null,
-                clientName: portal?.client_name,
-                projectName: portal?.project_name,
-              }),
+              workerEmail: assignedWorker.member_email,
+              jobTitle: milestoneForm.title,
+              scheduledAt: formScheduleDate ? new Date(`${formScheduleDate}T${formScheduleTime || '00:00'}`).toISOString() : null,
+              clientName: portal?.client_name,
+              projectName: portal?.project_name,
+              type: 'assignment',
+            }),
             });
           } catch (err) { console.error('Worker assignment notify failed:', err); }
         }
