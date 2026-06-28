@@ -290,6 +290,24 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
       if (formScheduleDate) {
         await notifyClient('schedule_updated', milestoneForm.title);
       }
+      if (milestoneForm.assigned_worker_id) {
+        const assignedWorker = workers.find(w => w.id === milestoneForm.assigned_worker_id);
+        if (assignedWorker?.member_email) {
+          try {
+            await fetch('/api/notify-worker', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                workerEmail: assignedWorker.member_email,
+                jobTitle: milestoneForm.title,
+                scheduledAt: formScheduleDate ? new Date(`${formScheduleDate}T${formScheduleTime || '00:00'}`).toISOString() : null,
+                clientName: portal?.client_name,
+                projectName: portal?.project_name,
+              }),
+            });
+          } catch (err) { console.error('Worker assignment notify failed:', err); }
+        }
+      }
     }
     setShowMilestoneForm(false); setEditingMilestoneId(null); setMilestoneForm(emptyForm); setFormScheduleDate(''); setFormScheduleTime('');
     const { data } = await supabase.from('portal_milestones').select('*').eq('portal_id', portalId).order('created_at', { ascending: true });
