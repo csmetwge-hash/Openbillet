@@ -297,7 +297,31 @@ export default function AdminPage() {
   };
 
   const deleteMilestoneFromCard = async (portalId: string, milestoneId: string, title: string) => {
-    if (!confirm(`Delete "${title}"? This cannot be undone.`)) return;
+    if (!confirm(`Delete "${title}"? This cannot be undone. If a worker is assigned, they will be notified of the cancellation.`)) return;
+
+    // Notify assigned worker before deleting
+    const milestone = portalMeta[portalId]?.milestones.find(m => m.id === milestoneId);
+    if (milestone?.assigned_worker_id) {
+      const assignedWorker = workers.find(w => w.id === milestone.assigned_worker_id);
+      const portal = portals.find(p => p.id === portalId);
+      if (assignedWorker?.member_email) {
+        try {
+          await fetch('/api/notify-worker', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              workerEmail: assignedWorker.member_email,
+              jobTitle: title,
+              scheduledAt: null,
+              clientName: portal?.client_name,
+              projectName: portal?.project_name,
+              type: 'cancellation',
+            }),
+          });
+        } catch (err) { console.error('Worker cancel notify failed:', err); }
+      }
+    }
+
     await supabase.from('portal_milestones').delete().eq('id', milestoneId);
     await refreshPortalMilestones(portalId);
     fetchScheduledJobs(portals.map(p => p.id));
