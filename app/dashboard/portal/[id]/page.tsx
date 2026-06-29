@@ -327,7 +327,29 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
 
   const deleteMilestone = async (id: string) => {
     if (isReadOnly) return;
-    if (!confirm('Delete this milestone?')) return;
+    if (!confirm('Delete this milestone? If a worker is assigned, they will be notified of the cancellation.')) return;
+
+    const milestone = milestones.find(m => m.id === id);
+    if (milestone?.assigned_worker_id) {
+      const assignedWorker = workers.find(w => w.id === milestone.assigned_worker_id);
+      if (assignedWorker?.member_email) {
+        try {
+          await fetch('/api/notify-worker', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              workerEmail: assignedWorker.member_email,
+              jobTitle: milestone.title,
+              scheduledAt: null,
+              clientName: portal?.client_name,
+              projectName: portal?.project_name,
+              type: 'cancellation',
+            }),
+          });
+        } catch (err) { console.error('Worker cancel notify failed:', err); }
+      }
+    }
+
     await supabase.from('portal_milestones').delete().eq('id', id);
     setMilestones(prev => prev.filter(m => m.id !== id));
   };
