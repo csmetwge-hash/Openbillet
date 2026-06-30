@@ -299,11 +299,12 @@ export default function AdminPage() {
   const deleteMilestoneFromCard = async (portalId: string, milestoneId: string, title: string) => {
     if (!confirm(`Delete "${title}"? This cannot be undone. If a worker is assigned, they will be notified of the cancellation.`)) return;
 
-    // Notify assigned worker before deleting
     const milestone = portalMeta[portalId]?.milestones.find(m => m.id === milestoneId);
+    const portal = portals.find(p => p.id === portalId);
+
+    // Notify assigned worker before deleting
     if (milestone?.assigned_worker_id) {
       const assignedWorker = workers.find(w => w.id === milestone.assigned_worker_id);
-      const portal = portals.find(p => p.id === portalId);
       if (assignedWorker?.member_email) {
         try {
           await fetch('/api/notify-worker', {
@@ -320,6 +321,21 @@ export default function AdminPage() {
           });
         } catch (err) { console.error('Worker cancel notify failed:', err); }
       }
+    }
+
+    // Notify client before deleting
+    if (portal?.client_email) {
+      try {
+        await fetch('/api/notify-client', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            portalId,
+            actionType: 'milestone_canceled',
+            detail: title,
+          }),
+        });
+      } catch (err) { console.error('Client cancel notify failed:', err); }
     }
 
     await supabase.from('portal_milestones').delete().eq('id', milestoneId);
@@ -344,30 +360,39 @@ export default function AdminPage() {
     await refreshPortalMilestones(portalId);
     fetchScheduledJobs(portals.map(p => p.id));
 
-    // Notify worker if assigned
+    // Notify worker if newly assigned OR if the schedule changed for an existing assignment
     const hadWorker = editingMilestone.milestone.assigned_worker_id;
     const newWorker = milestone.assigned_worker_id;
-    if (newWorker && newWorker !== hadWorker) {
-      const assignedWorker = workers.find(w => w.id === newWorker);
-      if (assignedWorker?.member_email) {
-        try {
-          await fetch('/api/notify-worker', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              workerEmail: assignedWorker.member_email,
-              jobTitle: milestone.title,
-              scheduledAt: editScheduleDate ? new Date(`${editScheduleDate}T${editScheduleTime || '00:00'}`).toISOString() : null,
-              clientName: portals.find(p => p.id === portalId)?.client_name,
-              projectName: portals.find(p => p.id === portalId)?.project_name,
-              type: 'assignment',
-            }),
-          });
-        } catch (err) { console.error('Worker assignment notify failed:', err); }
+    const hadScheduledAt = editingMilestone.milestone.scheduled_at;
+    const newScheduledAt = editScheduleDate ? new Date(`${editScheduleDate}T${editScheduleTime || '00:00'}`).toISOString() : null;
+    const dateChanged = hadScheduledAt !== newScheduledAt;
+
+    if (newWorker) {
+      const isNewAssignment = newWorker !== hadWorker;
+      const isReschedule = !isNewAssignment && dateChanged && newScheduledAt;
+
+      if (isNewAssignment || isReschedule) {
+        const assignedWorker = workers.find(w => w.id === newWorker);
+        if (assignedWorker?.member_email) {
+          try {
+            await fetch('/api/notify-worker', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                workerEmail: assignedWorker.member_email,
+                jobTitle: milestone.title,
+                scheduledAt: newScheduledAt,
+                clientName: portals.find(p => p.id === portalId)?.client_name,
+                projectName: portals.find(p => p.id === portalId)?.project_name,
+                type: isNewAssignment ? 'assignment' : undefined,
+              }),
+            });
+          } catch (err) { console.error('Worker notify failed:', err); }
+        }
       }
     }
 
-    // Notify client if a schedule date was set
+    // Notify client if a schedule date was set or changed
     const hadDate = !!editingMilestone.milestone.scheduled_at;
     const hasDate = !!editScheduleDate;
     if (hasDate) {
@@ -377,7 +402,7 @@ export default function AdminPage() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             portalId,
-            actionType: 'schedule_updated',
+            actionType: hadDate ? 'schedule_updated' : 'schedule_set',
             detail: milestone.title,
           }),
         });
