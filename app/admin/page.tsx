@@ -624,7 +624,7 @@ export default function AdminPage() {
                 return (
                   <div key={p.id} id={`portal-${p.id}`} className="bg-white border border-zinc-200 rounded-2xl overflow-hidden hover:border-zinc-300 transition">
 
-                    <button
+                    <div
                       onClick={() => setExpandedPortalId(isExpanded ? null : p.id)}
                       className="w-full text-left p-5 cursor-pointer"
                     >
@@ -662,7 +662,7 @@ export default function AdminPage() {
                           </div>
                         </div>
                       )}
-                    </button>
+                    </div>
 
                     {isExpanded && (
                       <div className="px-5 pb-5 border-t border-zinc-100 pt-4 space-y-4">
@@ -753,7 +753,7 @@ export default function AdminPage() {
                           </div>
                         )}
 
-                        <div className="flex items-center gap-2 flex-wrap pt-1">
+                        <div className="flex items-center gap-2 flex-wrap pt-1" onClick={(e) => e.stopPropagation()}>
                           <Link href={`/dashboard/portal/${p.id}`}
                             className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider bg-zinc-900 text-white px-3 py-2 rounded-xl hover:bg-zinc-700 transition">
                             <Settings className="w-3.5 h-3.5" /> Open Full View
