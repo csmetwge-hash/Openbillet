@@ -665,7 +665,7 @@ export default function AdminPage() {
                     </button>
 
                     {isExpanded && (
-                      <div className="px-5 pb-5 border-t border-zinc-100 pt-4 space-y-4" onClick={(e) => e.stopPropagation()}>
+                      <div className="px-5 pb-5 border-t border-zinc-100 pt-4 space-y-4">
 
                         <div className="space-y-2">
                           <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">
