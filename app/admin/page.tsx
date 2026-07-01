@@ -713,10 +713,11 @@ export default function AdminPage() {
                             </div>
                           )}
                           {hasMoreMilestones && (
-                            <Link href={`/dashboard/portal/${p.id}`}
-                              className="text-[10px] font-bold text-zinc-400 hover:text-zinc-700 transition flex items-center gap-1 mt-1">
-                              + {allIncompleteMilestones.length - 3} more — Open Full View
-                            </Link>
+                            <button
+                            onClick={(e) => { e.stopPropagation(); router.push(`/dashboard/portal/${p.id}`); }}
+                            className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider bg-zinc-900 text-white px-3 py-2 rounded-xl hover:bg-zinc-700 transition cursor-pointer">
+                            <Settings className="w-3.5 h-3.5" /> Open Full View
+                          </button>
                           )}
                           {completedMilestonesList.length > 0 && (
                             <details className="text-xs">
@@ -763,10 +764,11 @@ export default function AdminPage() {
                             {copiedToken === p.magic_token ? <Check className="w-3.5 h-3.5" /> : <Share2 className="w-3.5 h-3.5" />}
                             {copiedToken === p.magic_token ? 'Copied!' : 'Share'}
                           </button>
-                          <Link href={`/portal/${p.magic_token}`}
-                            className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider border border-zinc-200 bg-white hover:bg-zinc-50 text-zinc-600 px-3 py-2 rounded-xl transition">
+                          <button
+                            onClick={(e) => { e.stopPropagation(); router.push(`/portal/${p.magic_token}`); }}
+                            className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider border border-zinc-200 bg-white hover:bg-zinc-50 text-zinc-600 px-3 py-2 rounded-xl transition cursor-pointer">
                             <Eye className="w-3.5 h-3.5" /> Preview as Client
-                          </Link>
+                          </button>
                           <button
                             onClick={(e) => handleToggleArchive(p.id, p.status, e)}
                             className={`flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider border px-3 py-2 rounded-xl transition cursor-pointer ml-auto ${
