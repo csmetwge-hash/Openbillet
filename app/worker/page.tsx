@@ -7,6 +7,7 @@ import { resolveWorkspaceAccess } from '@/lib/workspace';
 import {
   LogOut, CheckCircle2, AlertTriangle, Clock, MapPin, DollarSign, Camera, Calendar, RotateCcw,
 } from 'lucide-react';
+import NotificationButton from '@/components/NotificationButton';
 
 interface PortalInfo {
   client_name: string;
@@ -201,9 +202,12 @@ export default function WorkerDashboard() {
               {workerEmail ? `${workerEmail.split('@')[0]}'s Jobs` : 'My Jobs'}
             </h1>
           </div>
-          <button onClick={handleLogout} className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-zinc-400 hover:text-zinc-700 transition cursor-pointer px-3 py-2 rounded-xl hover:bg-zinc-100">
-            <LogOut className="w-3.5 h-3.5" /> Log Out
-          </button>
+          <div className="flex items-center gap-2">
+            <NotificationButton compact />
+            <button onClick={handleLogout} className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-zinc-400 hover:text-zinc-700 transition cursor-pointer px-3 py-2 rounded-xl hover:bg-zinc-100">
+              <LogOut className="w-3.5 h-3.5" /> Log Out
+            </button>
+          </div>
         </div>
       </header>
 

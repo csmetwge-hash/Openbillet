@@ -8,6 +8,7 @@ import {
   ArrowLeft, Upload, Save, UserPlus, Trash2, Mail,
   CheckCircle2, AlertCircle, Crown, Shield, Eye, Wrench,
 } from 'lucide-react';
+import NotificationButton from '@/components/NotificationButton';
 
 export default function SettingsPage() {
   const router = useRouter();
@@ -224,6 +225,10 @@ export default function SettingsPage() {
             <p className="text-[10px] text-zinc-400 mt-1">
               Override where client activity alerts are sent. Defaults to your login email.
             </p>
+          </div>
+          <div className="pt-2 border-t border-zinc-100">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-2">Push Notifications</p>
+            <NotificationButton />
           </div>
         </div>
 
