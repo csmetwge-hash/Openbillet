@@ -124,9 +124,11 @@ export async function POST(req: Request) {
           }),
         });
 
-        // Also notify client on completion with payment (not on undo, not on no-payment completion)
-        const isCompletion = notifyType === 'job_completed_paid' || notifyType === 'job_completed_awaiting_payment';
-        if (isCompletion && notifyType !== 'job_completed_no_payment') {
+        // Notify client on any completion type (paid, awaiting payment, or no payment)
+        const isCompletion = notifyType === 'job_completed_paid'
+          || notifyType === 'job_completed_awaiting_payment'
+          || notifyType === 'job_completed_no_payment';
+        if (isCompletion) {
           await fetch(`${process.env.NEXT_PUBLIC_APP_URL}/api/notify-client`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
