@@ -1264,27 +1264,35 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
                   rows={4} className="w-full border border-zinc-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-zinc-900 transition resize-none" />
                 <div className="space-y-3">
                   <p className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Line Items</p>
-                  <div className="grid grid-cols-12 gap-2 px-1">
+                  <div className="hidden sm:grid grid-cols-12 gap-2 px-1">
                     <span className="col-span-6 text-[10px] font-bold uppercase tracking-wider text-zinc-400">Description</span>
                     <span className="col-span-2 text-[10px] font-bold uppercase tracking-wider text-zinc-400 text-center">Qty</span>
                     <span className="col-span-3 text-[10px] font-bold uppercase tracking-wider text-zinc-400">Price ($)</span>
                     <span className="col-span-1" />
                   </div>
                   {lineItems.map((item, i) => (
-                    <div key={i} className="grid grid-cols-12 gap-2 items-center">
+                    <div key={i} className="flex flex-col gap-2 pb-3 border-b border-zinc-100 sm:grid sm:grid-cols-12 sm:gap-2 sm:items-center sm:pb-0 sm:border-b-0 last:pb-0 last:border-b-0">
                       <input type="text" placeholder="e.g. Lawn mowing" value={item.description}
                         onChange={e => setLineItems(prev => prev.map((it, idx) => idx === i ? { ...it, description: e.target.value } : it))}
-                        className="col-span-6 border border-zinc-200 rounded-xl px-3 py-2.5 text-xs focus:outline-none focus:border-zinc-900 transition" />
-                      <input type="number" min={1} value={item.quantity}
-                        onChange={e => setLineItems(prev => prev.map((it, idx) => idx === i ? { ...it, quantity: Number(e.target.value) } : it))}
-                        className="col-span-2 border border-zinc-200 rounded-xl px-2 py-2.5 text-xs focus:outline-none focus:border-zinc-900 transition text-center" />
-                      <input type="number" min={0} placeholder="0" value={item.unit_price || ''}
-                        onChange={e => setLineItems(prev => prev.map((it, idx) => idx === i ? { ...it, unit_price: Number(e.target.value) } : it))}
-                        className="col-span-3 border border-zinc-200 rounded-xl px-3 py-2.5 text-xs focus:outline-none focus:border-zinc-900 transition" />
-                      <button onClick={() => setLineItems(prev => prev.filter((_, idx) => idx !== i))}
-                        className="col-span-1 flex items-center justify-center text-zinc-300 hover:text-red-400 transition cursor-pointer">
-                        <X className="w-4 h-4" />
-                      </button>
+                        className="w-full sm:col-span-6 border border-zinc-200 rounded-xl px-3 py-2.5 text-xs focus:outline-none focus:border-zinc-900 transition" />
+                      <div className="grid grid-cols-[1fr_1fr_auto] gap-2 items-end sm:contents">
+                        <div className="sm:col-span-2">
+                          <label className="sm:hidden block text-[9px] font-bold uppercase tracking-wider text-zinc-400 mb-1">Qty</label>
+                          <input type="number" min={1} value={item.quantity}
+                            onChange={e => setLineItems(prev => prev.map((it, idx) => idx === i ? { ...it, quantity: Number(e.target.value) } : it))}
+                            className="w-full border border-zinc-200 rounded-xl px-2 py-2.5 text-xs focus:outline-none focus:border-zinc-900 transition text-center" />
+                        </div>
+                        <div className="sm:col-span-3">
+                          <label className="sm:hidden block text-[9px] font-bold uppercase tracking-wider text-zinc-400 mb-1">Price ($)</label>
+                          <input type="number" min={0} placeholder="0" value={item.unit_price || ''}
+                            onChange={e => setLineItems(prev => prev.map((it, idx) => idx === i ? { ...it, unit_price: Number(e.target.value) } : it))}
+                            className="w-full border border-zinc-200 rounded-xl px-3 py-2.5 text-xs focus:outline-none focus:border-zinc-900 transition" />
+                        </div>
+                        <button onClick={() => setLineItems(prev => prev.filter((_, idx) => idx !== i))}
+                          className="sm:col-span-1 flex items-center justify-center text-zinc-300 hover:text-red-400 transition cursor-pointer h-[42px] sm:h-auto">
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
                     </div>
                   ))}
                   <button onClick={() => setLineItems(prev => [...prev, { description: '', quantity: 1, unit_price: 0 }])}
