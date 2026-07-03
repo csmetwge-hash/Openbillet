@@ -11,7 +11,7 @@ import {
   User, Phone, MapPin, Tag, FileText, Edit3,
   Copy, Check, X, Lock, Share2, Archive, RotateCcw,
   Activity, Camera, BookTemplate, ChevronDown, Image,
-  Calendar, AlertTriangle,
+  Calendar, AlertTriangle, CheckCircle2, Clock,
 } from 'lucide-react';
 import { resolveWorkspaceAccess } from '@/lib/workspace';
 
@@ -216,12 +216,12 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
     setActivity(data || []);
   };
 
-  const notifyClient = async (actionType: string, detail?: string) => {
+  const notifyClient = async (actionType: string, detail?: string, hasPhotos?: boolean) => {
     try {
       await fetch('/api/notify-client', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ portalId, actionType, detail }),
+        body: JSON.stringify({ portalId, actionType, detail, hasPhotos }),
       });
     } catch (err) { console.error('Client notify failed:', err); }
   };
@@ -362,10 +362,38 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
     if (isReadOnly) return;
     await supabase.from('portal_milestones').update({ status: newStatus }).eq('id', id);
     setMilestones(prev => prev.map(m => m.id === id ? { ...m, status: newStatus } : m));
-    if (newStatus === 'completed') {
-      await logActivity('milestone_completed', `Milestone completed: ${title}`);
-      await notifyClient('milestone_completed', title);
-    }
+  };
+
+  const completeMilestoneNoPayment = async (m: any) => {
+    if (isReadOnly) return;
+    await supabase.from('portal_milestones').update({ status: 'completed' }).eq('id', m.id);
+    setMilestones(prev => prev.map(x => x.id === m.id ? { ...x, status: 'completed' } : x));
+    await logActivity('milestone_completed', `Milestone completed: ${m.title}`);
+    await notifyClient('milestone_completed', m.title, !!(m.photo_before_url || m.photo_after_url));
+  };
+
+  const completeMilestonePaid = async (m: any) => {
+    if (isReadOnly) return;
+    await supabase.from('portal_milestones').update({ status: 'completed' }).eq('id', m.id);
+    setMilestones(prev => prev.map(x => x.id === m.id ? { ...x, status: 'completed' } : x));
+    await logActivity('milestone_completed', `Milestone completed (payment collected): ${m.title}`);
+    await notifyClient('job_completed_paid', m.title, !!(m.photo_before_url || m.photo_after_url));
+  };
+
+  const completeMilestoneAwaitingPayment = async (m: any) => {
+    if (isReadOnly) return;
+    await supabase.from('portal_milestones').update({ worker_status: 'completed' }).eq('id', m.id);
+    setMilestones(prev => prev.map(x => x.id === m.id ? { ...x, worker_status: 'completed' } : x));
+    await logActivity('milestone_completed', `Milestone completed, awaiting payment: ${m.title}`);
+    await notifyClient('job_completed_awaiting_payment', m.title, !!(m.photo_before_url || m.photo_after_url));
+  };
+
+  const confirmPaymentReceived = async (m: any) => {
+    if (isReadOnly) return;
+    await supabase.from('portal_milestones').update({ status: 'completed' }).eq('id', m.id);
+    setMilestones(prev => prev.map(x => x.id === m.id ? { ...x, status: 'completed' } : x));
+    await logActivity('payment_confirmed', `Payment confirmed: ${m.title}`);
+    await notifyClient('job_completed_paid', m.title, !!(m.photo_before_url || m.photo_after_url));
   };
 
   const deleteMilestone = async (id: string) => {
@@ -1000,16 +1028,25 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
                 <div className="p-4">
                   <div className="flex items-start gap-3">
                     {!isReadOnly ? (
-                      <select
-                        value={m.status}
-                        onChange={(e) => advanceMilestone(m.id, e.target.value, m.title)}
-                        onClick={(e) => e.stopPropagation()}
-                        className="shrink-0 text-[10px] border border-zinc-200 rounded-lg px-2 py-1.5 bg-white text-zinc-600 focus:outline-none cursor-pointer"
-                      >
-                        <option value="incomplete">Incomplete</option>
-                        <option value="in_progress">In Progress</option>
-                        <option value="completed">Completed</option>
-                      </select>
+                      m.status === 'completed' ? (
+                        <span className="shrink-0 text-[9px] font-bold uppercase px-2 py-1 rounded-full bg-emerald-50 text-emerald-600 flex items-center gap-1">
+                          <CheckCircle2 className="w-3 h-3" /> Completed
+                        </span>
+                      ) : m.worker_status === 'completed' ? (
+                        <span className="shrink-0 text-[9px] font-bold uppercase px-2 py-1 rounded-full bg-blue-50 text-blue-600 flex items-center gap-1">
+                          <Clock className="w-3 h-3" /> Awaiting Payment
+                        </span>
+                      ) : (
+                        <select
+                          value={m.status}
+                          onChange={(e) => advanceMilestone(m.id, e.target.value, m.title)}
+                          onClick={(e) => e.stopPropagation()}
+                          className="shrink-0 text-[10px] border border-zinc-200 rounded-lg px-2 py-1.5 bg-white text-zinc-600 focus:outline-none cursor-pointer"
+                        >
+                          <option value="incomplete">Incomplete</option>
+                          <option value="in_progress">In Progress</option>
+                        </select>
+                      )
                     ) : (
                       <span className={`shrink-0 text-[9px] font-bold uppercase px-2 py-1 rounded-full ${
                         m.status === 'completed' ? 'bg-emerald-50 text-emerald-600' :
@@ -1100,6 +1137,35 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
                       )}
                     </div>
                   </div>
+
+                  {!isReadOnly && m.status !== 'completed' && (
+                    <div className="mt-3">
+                      {m.worker_status === 'completed' ? (
+                        <button onClick={() => confirmPaymentReceived(m)}
+                          className="w-full flex items-center justify-center gap-1.5 bg-zinc-900 text-white text-[10px] font-bold uppercase tracking-wider py-2.5 rounded-xl hover:bg-zinc-700 transition cursor-pointer">
+                          <CheckCircle2 className="w-3.5 h-3.5" /> Confirm Payment Received & Notify Client
+                        </button>
+                      ) : (m.amount || m.payment_link) ? (
+                        <div className="grid grid-cols-2 gap-2">
+                          <button onClick={() => completeMilestonePaid(m)}
+                            className="flex flex-col items-center justify-center gap-0.5 bg-zinc-900 text-white text-[10px] font-bold uppercase tracking-wider py-2.5 rounded-xl hover:bg-zinc-700 transition cursor-pointer">
+                            <span className="flex items-center gap-1"><CheckCircle2 className="w-3.5 h-3.5" /> Complete</span>
+                            <span className="font-normal normal-case text-[9px] text-zinc-300">Payment collected</span>
+                          </button>
+                          <button onClick={() => completeMilestoneAwaitingPayment(m)}
+                            className="flex flex-col items-center justify-center gap-0.5 border border-zinc-300 text-zinc-700 text-[10px] font-bold uppercase tracking-wider py-2.5 rounded-xl hover:bg-zinc-50 transition cursor-pointer">
+                            <span className="flex items-center gap-1"><CheckCircle2 className="w-3.5 h-3.5" /> Complete</span>
+                            <span className="font-normal normal-case text-[9px] text-zinc-400">Awaiting payment</span>
+                          </button>
+                        </div>
+                      ) : (
+                        <button onClick={() => completeMilestoneNoPayment(m)}
+                          className="w-full flex items-center justify-center gap-1.5 bg-zinc-900 text-white text-[10px] font-bold uppercase tracking-wider py-2.5 rounded-xl hover:bg-zinc-700 transition cursor-pointer">
+                          <CheckCircle2 className="w-3.5 h-3.5" /> Mark Complete & Notify Client
+                        </button>
+                      )}
+                    </div>
+                  )}
 
                   {/* Before/After photos */}
                   {!isReadOnly && (
