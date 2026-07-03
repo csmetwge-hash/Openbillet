@@ -56,6 +56,7 @@ export default function WorkerDashboard() {
   const [jobMessageDrafts, setJobMessageDrafts] = useState<Record<string, string>>({});
   const [sendingMessage, setSendingMessage] = useState<string | null>(null);
   const [pendingPhotos, setPendingPhotos] = useState<Record<string, { file: File; previewUrl: string }>>({});
+  const [failedJobPhoto, setFailedJobPhoto] = useState<Record<string, { file: File; text: string; offline: boolean }>>({});
   const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
   const openThreadsRef = useRef<Record<string, boolean>>({});
   useEffect(() => { openThreadsRef.current = openThreads; }, [openThreads]);
@@ -280,7 +281,11 @@ export default function WorkerDashboard() {
         body: JSON.stringify({ milestoneId: jobId, message: text || 'Sent a photo' }),
       }).catch(() => {});
     } catch (err: any) {
-      alert('Error sending message: ' + err.message);
+      if (pending) {
+        setFailedJobPhoto(prev => ({ ...prev, [jobId]: { file: pending.file, text, offline: !navigator.onLine } }));
+      } else {
+        alert('Error sending message: ' + err.message);
+      }
     } finally {
       setSendingMessage(null);
     }
@@ -456,7 +461,23 @@ export default function WorkerDashboard() {
                         </div>
                       ))}
                     </div>
-                    {pendingPhotos[job.id] && (
+                    {failedJobPhoto[job.id] && (
+                        <div className="flex items-center gap-2 mb-2 bg-amber-50 border border-amber-200 rounded-xl p-2">
+                          <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0" />
+                          <p className="text-[10px] text-amber-700 flex-1">
+                            {failedJobPhoto[job.id].offline ? 'No connection —' : 'Send failed —'} message with photo not sent
+                          </p>
+                          <button onClick={() => {
+                            const f = failedJobPhoto[job.id];
+                            setPendingPhotos(prev => ({ ...prev, [job.id]: { file: f.file, previewUrl: URL.createObjectURL(f.file) } }));
+                            setJobMessageDrafts(prev => ({ ...prev, [job.id]: f.text }));
+                            setFailedJobPhoto(prev => { const next = { ...prev }; delete next[job.id]; return next; });
+                          }} className="text-[10px] font-bold text-amber-700 underline cursor-pointer shrink-0">
+                            Retry
+                          </button>
+                        </div>
+                      )}
+                      {pendingPhotos[job.id] && (
                         <div className="flex items-center gap-2 mb-2 bg-zinc-50 border border-zinc-200 rounded-xl p-2">
                           <img src={pendingPhotos[job.id].previewUrl} alt="Preview" className="w-10 h-10 object-cover rounded-lg shrink-0" />
                           <p className="text-[10px] text-zinc-500 flex-1">Photo attached — add a caption or send as-is</p>
