@@ -55,9 +55,38 @@ export default function WorkerDashboard() {
   const [jobMessages, setJobMessages] = useState<Record<string, any[]>>({});
   const [jobMessageDrafts, setJobMessageDrafts] = useState<Record<string, string>>({});
   const [sendingMessage, setSendingMessage] = useState<string | null>(null);
-  const jobChannelsRef = useRef<Record<string, any>>({});
+  const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
+  const openThreadsRef = useRef<Record<string, boolean>>({});
+  useEffect(() => { openThreadsRef.current = openThreads; }, [openThreads]);
 
   useEffect(() => { init(); }, []);
+
+  useEffect(() => {
+    if (jobs.length === 0 || !currentUserId) return;
+    const jobIds = jobs.map(j => j.id);
+
+    (async () => {
+      const { data } = await supabase.from('job_messages').select('milestone_id')
+        .in('milestone_id', jobIds).eq('sender_role', 'admin').is('read_at', null);
+      const counts: Record<string, number> = {};
+      (data || []).forEach((row: any) => { counts[row.milestone_id] = (counts[row.milestone_id] || 0) + 1; });
+      setUnreadCounts(counts);
+    })();
+
+    const channel = supabase
+      .channel(`job-messages-worker-${workerId}`)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'job_messages', filter: `milestone_id=in.(${jobIds.join(',')})` },
+        (payload: any) => {
+          const msg = payload.new;
+          setJobMessages(prev => prev[msg.milestone_id] ? { ...prev, [msg.milestone_id]: [...prev[msg.milestone_id], msg] } : prev);
+          if (msg.sender_role === 'admin' && !openThreadsRef.current[msg.milestone_id]) {
+            setUnreadCounts(prev => ({ ...prev, [msg.milestone_id]: (prev[msg.milestone_id] || 0) + 1 }));
+          }
+        })
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [jobs, currentUserId, workerId]);
 
   const init = async () => {
     const { ownerId, currentUserId: uid, role } = await resolveWorkspaceAccess();
@@ -182,25 +211,20 @@ export default function WorkerDashboard() {
 
   // ── Job Messages ─────────────────────────────────────────
   const toggleMessageThread = async (jobId: string) => {
-    if (openThreads[jobId]) {
-      setOpenThreads(prev => ({ ...prev, [jobId]: false }));
-      if (jobChannelsRef.current[jobId]) {
-        supabase.removeChannel(jobChannelsRef.current[jobId]);
-        delete jobChannelsRef.current[jobId];
-      }
-      return;
-    }
-    setOpenThreads(prev => ({ ...prev, [jobId]: true }));
-    const { data } = await supabase.from('job_messages').select('*')
-      .eq('milestone_id', jobId).order('created_at', { ascending: true });
-    setJobMessages(prev => ({ ...prev, [jobId]: data || [] }));
+    const opening = !openThreads[jobId];
+    setOpenThreads(prev => ({ ...prev, [jobId]: opening }));
+    if (!opening) return;
 
-    const channel = supabase
-      .channel(`job-messages-${jobId}`)
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'job_messages', filter: `milestone_id=eq.${jobId}` },
-        (payload) => setJobMessages(prev => ({ ...prev, [jobId]: [...(prev[jobId] || []), payload.new] })))
-      .subscribe();
-    jobChannelsRef.current[jobId] = channel;
+    if (!jobMessages[jobId]) {
+      const { data } = await supabase.from('job_messages').select('*')
+        .eq('milestone_id', jobId).order('created_at', { ascending: true });
+      setJobMessages(prev => ({ ...prev, [jobId]: data || [] }));
+    }
+
+    await supabase.from('job_messages').update({ read_at: new Date().toISOString() })
+      .eq('milestone_id', jobId).eq('sender_role', 'admin').is('read_at', null);
+
+    setUnreadCounts(prev => ({ ...prev, [jobId]: 0 }));
   };
 
   const sendJobMessage = async (jobId: string, photoFile?: File) => {
@@ -321,8 +345,13 @@ export default function WorkerDashboard() {
                       <Clock className="w-3 h-3" /> {formatScheduled(job.scheduled_at)}
                     </span>
                     <button onClick={() => toggleMessageThread(job.id)}
-                      className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 hover:text-zinc-700 transition cursor-pointer flex items-center gap-1">
+                      className="relative text-[10px] font-bold uppercase tracking-wider text-zinc-400 hover:text-zinc-700 transition cursor-pointer flex items-center gap-1">
                       <MessageSquare className="w-3 h-3" /> Message
+                      {unreadCounts[job.id] > 0 && (
+                        <span className="absolute -top-1.5 -right-1.5 min-w-[14px] h-[14px] px-0.5 bg-red-500 text-white text-[8px] font-bold rounded-full flex items-center justify-center">
+                          {unreadCounts[job.id]}
+                        </span>
+                      )}
                     </button>
                   </div>
                 </div>
