@@ -6,7 +6,7 @@ const resend = new Resend(process.env.RESEND_API_KEY);
 
 export async function POST(req: Request) {
   try {
-    const { portalId, actionType, detail } = await req.json();
+    const { portalId, actionType, detail, hasPhotos } = await req.json();
 
     if (!portalId || !actionType) {
       return NextResponse.json({ error: 'Missing required fields.' }, { status: 400 });
@@ -63,7 +63,8 @@ export async function POST(req: Request) {
     };
 
     const subject = subjects[actionType] || `Update on ${portal.project_name}`;
-    const bodyLine = bodyLines[actionType] || `There is an update on <strong>${portal.project_name}</strong>.`;
+    const photoNote = hasPhotos ? ' Before/after photos are also available in your portal.' : '';
+    const bodyLine = (bodyLines[actionType] || `There is an update on <strong>${portal.project_name}</strong>.`) + photoNote;
 
     const emailHtml = `
       <div style="background:#09090b;color:#f4f4f5;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;padding:40px;border-radius:16px;max-width:600px;margin:0 auto;border:1px solid #27272a;">
