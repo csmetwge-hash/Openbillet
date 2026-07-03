@@ -79,6 +79,7 @@ export default function ClientPortal({ params }: { params: Promise<{ token: stri
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
+  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
 
   const [signingProposal, setSigningProposal] = useState<string | null>(null);
   const [signature, setSignature] = useState('');
@@ -370,13 +371,15 @@ export default function ClientPortal({ params }: { params: Promise<{ token: stri
                       {m.photo_before_url && (
                         <div>
                           <p className="text-[9px] font-bold uppercase tracking-wider text-zinc-400 mb-1.5">Before</p>
-                          <img src={m.photo_before_url} alt="Before" className="w-full h-32 object-cover rounded-xl border border-zinc-100" />
+                          <img src={m.photo_before_url} alt="Before" onClick={() => setLightboxUrl(m.photo_before_url!)}
+                            className="w-full h-32 object-cover rounded-xl border border-zinc-100 cursor-pointer hover:opacity-90 transition" />
                         </div>
                       )}
                       {m.photo_after_url && (
                         <div>
                           <p className="text-[9px] font-bold uppercase tracking-wider text-zinc-400 mb-1.5">After</p>
-                          <img src={m.photo_after_url} alt="After" className="w-full h-32 object-cover rounded-xl border border-zinc-100" />
+                          <img src={m.photo_after_url} alt="After" onClick={() => setLightboxUrl(m.photo_after_url!)}
+                            className="w-full h-32 object-cover rounded-xl border border-zinc-100 cursor-pointer hover:opacity-90 transition" />
                         </div>
                       )}
                     </div>
@@ -583,6 +586,18 @@ export default function ClientPortal({ params }: { params: Promise<{ token: stri
           </div>
         )}
       </div>
+
+      {lightboxUrl && (
+        <div onClick={() => setLightboxUrl(null)}
+          className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4 cursor-pointer">
+          <button onClick={() => setLightboxUrl(null)}
+            className="absolute top-4 right-4 text-white/70 hover:text-white transition cursor-pointer p-2">
+            <X className="w-6 h-6" />
+          </button>
+          <img src={lightboxUrl} alt="Full size" onClick={(e) => e.stopPropagation()}
+            className="max-w-full max-h-full object-contain rounded-xl" />
+        </div>
+      )}
     </div>
   );
 }
