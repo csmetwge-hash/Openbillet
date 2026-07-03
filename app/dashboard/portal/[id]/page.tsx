@@ -111,6 +111,7 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
   const [jobMessages, setJobMessages] = useState<Record<string, any[]>>({});
   const [jobMessageDrafts, setJobMessageDrafts] = useState<Record<string, string>>({});
   const [sendingMessage, setSendingMessage] = useState<string | null>(null);
+  const [pendingPhotos, setPendingPhotos] = useState<Record<string, { file: File; previewUrl: string }>>({});
   const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
   const openThreadsRef = useRef<Record<string, boolean>>({});
   useEffect(() => { openThreadsRef.current = openThreads; }, [openThreads]);
@@ -604,17 +605,32 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
     setUnreadCounts(prev => ({ ...prev, [milestoneId]: 0 }));
   };
 
-  const sendJobMessage = async (milestoneId: string, photoFile?: File) => {
+  const selectPhoto = (id: string, file: File) => {
+    const previewUrl = URL.createObjectURL(file);
+    setPendingPhotos(prev => ({ ...prev, [id]: { file, previewUrl } }));
+  };
+
+  const cancelPhoto = (id: string) => {
+    setPendingPhotos(prev => {
+      const next = { ...prev };
+      if (next[id]) URL.revokeObjectURL(next[id].previewUrl);
+      delete next[id];
+      return next;
+    });
+  };
+
+  const sendJobMessage = async (milestoneId: string) => {
     const text = jobMessageDrafts[milestoneId]?.trim();
-    if (!text && !photoFile) return;
+    const pending = pendingPhotos[milestoneId];
+    if (!text && !pending) return;
     if (!currentUserId) return;
     setSendingMessage(milestoneId);
     try {
       let photoUrl: string | null = null;
-      if (photoFile) {
-        const ext = photoFile.name.split('.').pop();
+      if (pending) {
+        const ext = pending.file.name.split('.').pop();
         const path = `job-messages/${milestoneId}/${crypto.randomUUID()}.${ext}`;
-        const { error: uploadErr } = await supabase.storage.from('portal-files').upload(path, photoFile, { upsert: true });
+        const { error: uploadErr } = await supabase.storage.from('portal-files').upload(path, pending.file, { upsert: true });
         if (uploadErr) throw uploadErr;
         const { data: urlData } = supabase.storage.from('portal-files').getPublicUrl(path);
         photoUrl = urlData.publicUrl;
@@ -630,6 +646,10 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
       if (error) throw error;
 
       setJobMessageDrafts(prev => ({ ...prev, [milestoneId]: '' }));
+      if (pending) {
+        URL.revokeObjectURL(pending.previewUrl);
+        setPendingPhotos(prev => { const next = { ...prev }; delete next[milestoneId]; return next; });
+      }
 
       fetch('/api/push/notify-job-message', {
         method: 'POST',
@@ -1117,6 +1137,16 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
                           </div>
                         ))}
                       </div>
+                      {pendingPhotos[m.id] && (
+                        <div className="flex items-center gap-2 mb-2 bg-zinc-50 border border-zinc-200 rounded-xl p-2">
+                          <img src={pendingPhotos[m.id].previewUrl} alt="Preview" className="w-10 h-10 object-cover rounded-lg shrink-0" />
+                          <p className="text-[10px] text-zinc-500 flex-1">Photo attached — add a caption or send as-is</p>
+                          <button onClick={() => cancelPhoto(m.id)}
+                            className="p-1 text-zinc-400 hover:text-red-500 transition cursor-pointer">
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      )}
                       <div className="flex items-center gap-2">
                         <input type="text" value={jobMessageDrafts[m.id] || ''}
                           onChange={e => setJobMessageDrafts(prev => ({ ...prev, [m.id]: e.target.value }))}
@@ -1126,10 +1156,10 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
                         <label className="p-2 border border-zinc-200 rounded-xl cursor-pointer hover:bg-zinc-50 transition shrink-0">
                           <Camera className="w-3.5 h-3.5 text-zinc-500" />
                           <input type="file" accept="image/*" className="hidden"
-                            onChange={e => e.target.files?.[0] && sendJobMessage(m.id, e.target.files[0])} />
+                            onChange={e => { if (e.target.files?.[0]) selectPhoto(m.id, e.target.files[0]); e.target.value = ''; }} />
                         </label>
                         <button onClick={() => sendJobMessage(m.id)}
-                          disabled={!jobMessageDrafts[m.id]?.trim() || sendingMessage === m.id}
+                          disabled={(!jobMessageDrafts[m.id]?.trim() && !pendingPhotos[m.id]) || sendingMessage === m.id}
                           className="p-2 bg-zinc-900 text-white rounded-xl hover:bg-zinc-700 transition cursor-pointer disabled:opacity-40 shrink-0">
                           <Send className="w-3.5 h-3.5" />
                         </button>
