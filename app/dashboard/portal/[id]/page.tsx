@@ -105,6 +105,14 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
 
   const isReadOnly = userRole === 'user';
 
+  // Job messages
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [openThreads, setOpenThreads] = useState<Record<string, boolean>>({});
+  const [jobMessages, setJobMessages] = useState<Record<string, any[]>>({});
+  const [jobMessageDrafts, setJobMessageDrafts] = useState<Record<string, string>>({});
+  const [sendingMessage, setSendingMessage] = useState<string | null>(null);
+  const jobChannelsRef = useRef<Record<string, any>>({});
+
   useEffect(() => {
     fetchAll();
     const notesChannel = supabase
@@ -130,7 +138,8 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
   }, [milestones, searchParams]);
 
   const fetchAll = async () => {
-    const { ownerId, role } = await resolveWorkspaceAccess();
+    const { ownerId, role, currentUserId: uid } = await resolveWorkspaceAccess();
+    setCurrentUserId(uid);
     if (role === 'worker') { router.push('/worker'); return; }
     if (!ownerId) { router.push('/auth'); return; }
     setUserRole(role);
@@ -548,6 +557,68 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
     setShowInvoiceModal(false);
   };
 
+  // ── Job Messages ─────────────────────────────────────────
+  const toggleMessageThread = async (milestoneId: string) => {
+    if (openThreads[milestoneId]) {
+      setOpenThreads(prev => ({ ...prev, [milestoneId]: false }));
+      if (jobChannelsRef.current[milestoneId]) {
+        supabase.removeChannel(jobChannelsRef.current[milestoneId]);
+        delete jobChannelsRef.current[milestoneId];
+      }
+      return;
+    }
+    setOpenThreads(prev => ({ ...prev, [milestoneId]: true }));
+    const { data } = await supabase.from('job_messages').select('*')
+      .eq('milestone_id', milestoneId).order('created_at', { ascending: true });
+    setJobMessages(prev => ({ ...prev, [milestoneId]: data || [] }));
+
+    const channel = supabase
+      .channel(`job-messages-${milestoneId}`)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'job_messages', filter: `milestone_id=eq.${milestoneId}` },
+        (payload) => setJobMessages(prev => ({ ...prev, [milestoneId]: [...(prev[milestoneId] || []), payload.new] })))
+      .subscribe();
+    jobChannelsRef.current[milestoneId] = channel;
+  };
+
+  const sendJobMessage = async (milestoneId: string, photoFile?: File) => {
+    const text = jobMessageDrafts[milestoneId]?.trim();
+    if (!text && !photoFile) return;
+    if (!currentUserId) return;
+    setSendingMessage(milestoneId);
+    try {
+      let photoUrl: string | null = null;
+      if (photoFile) {
+        const ext = photoFile.name.split('.').pop();
+        const path = `job-messages/${milestoneId}/${crypto.randomUUID()}.${ext}`;
+        const { error: uploadErr } = await supabase.storage.from('portal-files').upload(path, photoFile, { upsert: true });
+        if (uploadErr) throw uploadErr;
+        const { data: urlData } = supabase.storage.from('portal-files').getPublicUrl(path);
+        photoUrl = urlData.publicUrl;
+      }
+
+      const { error } = await supabase.from('job_messages').insert({
+        milestone_id: milestoneId,
+        sender_id: currentUserId,
+        sender_role: 'admin',
+        message: text || null,
+        photo_url: photoUrl,
+      });
+      if (error) throw error;
+
+      setJobMessageDrafts(prev => ({ ...prev, [milestoneId]: '' }));
+
+      fetch('/api/push/notify-job-message', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ milestoneId, message: text || 'Sent a photo' }),
+      }).catch(() => {});
+    } catch (err: any) {
+      alert('Error sending message: ' + err.message);
+    } finally {
+      setSendingMessage(null);
+    }
+  };
+
   // ── CRM ──────────────────────────────────────────────────
   const saveCrm = async () => {
     if (isReadOnly) return;
@@ -936,18 +1007,26 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
                         </div>
                       )}
                     </div>
-                    {!isReadOnly && (
-                      <div className="flex items-center gap-1 shrink-0">
-                        <button onClick={() => openEditForm(m)}
+                    <div className="flex items-center gap-1 shrink-0">
+                      {m.assigned_worker_id && (
+                        <button onClick={() => toggleMessageThread(m.id)}
                           className="p-1.5 text-zinc-300 hover:text-zinc-600 transition cursor-pointer rounded-lg hover:bg-zinc-100">
-                          <Edit3 className="w-3.5 h-3.5" />
+                          <MessageSquare className="w-3.5 h-3.5" />
                         </button>
-                        <button onClick={() => deleteMilestone(m.id)}
-                          className="p-1.5 text-zinc-300 hover:text-red-400 transition cursor-pointer rounded-lg hover:bg-red-50">
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    )}
+                      )}
+                      {!isReadOnly && (
+                        <>
+                          <button onClick={() => openEditForm(m)}
+                            className="p-1.5 text-zinc-300 hover:text-zinc-600 transition cursor-pointer rounded-lg hover:bg-zinc-100">
+                            <Edit3 className="w-3.5 h-3.5" />
+                          </button>
+                          <button onClick={() => deleteMilestone(m.id)}
+                            className="p-1.5 text-zinc-300 hover:text-red-400 transition cursor-pointer rounded-lg hover:bg-red-50">
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </>
+                      )}
+                    </div>
                   </div>
 
                   {/* Before/After photos */}
@@ -984,6 +1063,48 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
                           <img src={m.photo_after_url} alt="After" className="w-full h-24 object-cover rounded-xl border border-zinc-100" />
                         </div>
                       )}
+                    </div>
+                  )}
+
+                  {/* Job message thread */}
+                  {openThreads[m.id] && (
+                    <div className="mt-3 pt-3 border-t border-zinc-100">
+                      <div className="space-y-2 max-h-64 overflow-y-auto mb-2 pr-1">
+                        {(jobMessages[m.id] || []).length === 0 ? (
+                          <p className="text-xs text-zinc-400 text-center py-4">No messages yet.</p>
+                        ) : (jobMessages[m.id] || []).map((msg: any) => (
+                          <div key={msg.id} className={`flex ${msg.sender_role === 'admin' ? 'justify-end' : 'justify-start'}`}>
+                            <div className={`max-w-[80%] px-3 py-2 rounded-xl text-xs leading-relaxed ${
+                              msg.sender_role === 'admin' ? 'bg-zinc-900 text-white rounded-br-sm' : 'bg-zinc-100 text-zinc-900 rounded-bl-sm'
+                            }`}>
+                              {msg.photo_url && (
+                                <img src={msg.photo_url} alt="attachment" className="rounded-lg mb-1 max-h-32 object-cover" />
+                              )}
+                              {msg.message && <p className="whitespace-pre-wrap">{msg.message}</p>}
+                              <p className="text-[9px] mt-1 opacity-60">
+                                {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                              </p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <input type="text" value={jobMessageDrafts[m.id] || ''}
+                          onChange={e => setJobMessageDrafts(prev => ({ ...prev, [m.id]: e.target.value }))}
+                          onKeyDown={e => { if (e.key === 'Enter') sendJobMessage(m.id); }}
+                          placeholder="Message the worker..."
+                          className="flex-1 border border-zinc-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-zinc-900 transition" />
+                        <label className="p-2 border border-zinc-200 rounded-xl cursor-pointer hover:bg-zinc-50 transition shrink-0">
+                          <Camera className="w-3.5 h-3.5 text-zinc-500" />
+                          <input type="file" accept="image/*" className="hidden"
+                            onChange={e => e.target.files?.[0] && sendJobMessage(m.id, e.target.files[0])} />
+                        </label>
+                        <button onClick={() => sendJobMessage(m.id)}
+                          disabled={!jobMessageDrafts[m.id]?.trim() || sendingMessage === m.id}
+                          className="p-2 bg-zinc-900 text-white rounded-xl hover:bg-zinc-700 transition cursor-pointer disabled:opacity-40 shrink-0">
+                          <Send className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     </div>
                   )}
                 </div>
