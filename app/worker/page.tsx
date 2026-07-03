@@ -68,7 +68,7 @@ export default function WorkerDashboard() {
     const { data: worker } = await supabase
       .from('team_members')
       .select('id, member_email')
-      .eq('member_user_id', currentUserId)
+      .eq('member_user_id', uid)
       .eq('owner_user_id', ownerId)
       .eq('role', 'worker')
       .eq('status', 'active')
