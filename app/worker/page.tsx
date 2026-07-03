@@ -1,11 +1,12 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useRouter } from 'next/navigation';
 import { resolveWorkspaceAccess } from '@/lib/workspace';
 import {
   LogOut, CheckCircle2, AlertTriangle, Clock, MapPin, DollarSign, Camera, Calendar, RotateCcw,
+  MessageSquare, Send,
 } from 'lucide-react';
 import NotificationButton from '@/components/NotificationButton';
 
@@ -48,11 +49,20 @@ export default function WorkerDashboard() {
   const [uploadingPhoto, setUploadingPhoto] = useState<string | null>(null);
   const [failedUploads, setFailedUploads] = useState<Record<string, { file: File; offline: boolean }>>({});
 
+  // Job messages
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [openThreads, setOpenThreads] = useState<Record<string, boolean>>({});
+  const [jobMessages, setJobMessages] = useState<Record<string, any[]>>({});
+  const [jobMessageDrafts, setJobMessageDrafts] = useState<Record<string, string>>({});
+  const [sendingMessage, setSendingMessage] = useState<string | null>(null);
+  const jobChannelsRef = useRef<Record<string, any>>({});
+
   useEffect(() => { init(); }, []);
 
   const init = async () => {
-    const { ownerId, currentUserId, role } = await resolveWorkspaceAccess();
-    if (!currentUserId) { router.push('/auth'); return; }
+    const { ownerId, currentUserId: uid, role } = await resolveWorkspaceAccess();
+    if (!uid) { router.push('/auth'); return; }
+    setCurrentUserId(uid);
     if (role !== 'worker') { router.push('/dashboard'); return; }
 
     const { data: worker } = await supabase
@@ -170,6 +180,68 @@ export default function WorkerDashboard() {
     uploadPhoto(jobId, type, pending.file);
   };
 
+  // ── Job Messages ─────────────────────────────────────────
+  const toggleMessageThread = async (jobId: string) => {
+    if (openThreads[jobId]) {
+      setOpenThreads(prev => ({ ...prev, [jobId]: false }));
+      if (jobChannelsRef.current[jobId]) {
+        supabase.removeChannel(jobChannelsRef.current[jobId]);
+        delete jobChannelsRef.current[jobId];
+      }
+      return;
+    }
+    setOpenThreads(prev => ({ ...prev, [jobId]: true }));
+    const { data } = await supabase.from('job_messages').select('*')
+      .eq('milestone_id', jobId).order('created_at', { ascending: true });
+    setJobMessages(prev => ({ ...prev, [jobId]: data || [] }));
+
+    const channel = supabase
+      .channel(`job-messages-${jobId}`)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'job_messages', filter: `milestone_id=eq.${jobId}` },
+        (payload) => setJobMessages(prev => ({ ...prev, [jobId]: [...(prev[jobId] || []), payload.new] })))
+      .subscribe();
+    jobChannelsRef.current[jobId] = channel;
+  };
+
+  const sendJobMessage = async (jobId: string, photoFile?: File) => {
+    const text = jobMessageDrafts[jobId]?.trim();
+    if (!text && !photoFile) return;
+    if (!currentUserId) return;
+    setSendingMessage(jobId);
+    try {
+      let photoUrl: string | null = null;
+      if (photoFile) {
+        const ext = photoFile.name.split('.').pop();
+        const path = `job-messages/${jobId}/${crypto.randomUUID()}.${ext}`;
+        const { error: uploadErr } = await supabase.storage.from('portal-files').upload(path, photoFile, { upsert: true });
+        if (uploadErr) throw uploadErr;
+        const { data: urlData } = supabase.storage.from('portal-files').getPublicUrl(path);
+        photoUrl = urlData.publicUrl;
+      }
+
+      const { error } = await supabase.from('job_messages').insert({
+        milestone_id: jobId,
+        sender_id: currentUserId,
+        sender_role: 'worker',
+        message: text || null,
+        photo_url: photoUrl,
+      });
+      if (error) throw error;
+
+      setJobMessageDrafts(prev => ({ ...prev, [jobId]: '' }));
+
+      fetch('/api/push/notify-job-message', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ milestoneId: jobId, message: text || 'Sent a photo' }),
+      }).catch(() => {});
+    } catch (err: any) {
+      alert('Error sending message: ' + err.message);
+    } finally {
+      setSendingMessage(null);
+    }
+  };
+
   const handleLogout = async () => {
     await supabase.auth.signOut();
     router.push('/auth');
@@ -244,9 +316,15 @@ export default function WorkerDashboard() {
                       </p>
                     )}
                   </div>
-                  <span className="shrink-0 text-[10px] font-bold uppercase tracking-wider bg-zinc-100 border border-zinc-200 text-zinc-600 px-2 py-1 rounded-lg flex items-center gap-1">
-                    <Clock className="w-3 h-3" /> {formatScheduled(job.scheduled_at)}
-                  </span>
+                  <div className="flex flex-col items-end gap-1.5 shrink-0">
+                    <span className="text-[10px] font-bold uppercase tracking-wider bg-zinc-100 border border-zinc-200 text-zinc-600 px-2 py-1 rounded-lg flex items-center gap-1">
+                      <Clock className="w-3 h-3" /> {formatScheduled(job.scheduled_at)}
+                    </span>
+                    <button onClick={() => toggleMessageThread(job.id)}
+                      className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 hover:text-zinc-700 transition cursor-pointer flex items-center gap-1">
+                      <MessageSquare className="w-3 h-3" /> Message
+                    </button>
+                  </div>
                 </div>
 
                 {job.description && (
@@ -306,6 +384,48 @@ export default function WorkerDashboard() {
                     );
                   })}
                 </div>
+
+                {/* Job message thread */}
+                {openThreads[job.id] && (
+                  <div className="pt-2 border-t border-zinc-100">
+                    <div className="space-y-2 max-h-64 overflow-y-auto mb-2 pr-1">
+                      {(jobMessages[job.id] || []).length === 0 ? (
+                        <p className="text-xs text-zinc-400 text-center py-4">No messages yet.</p>
+                      ) : (jobMessages[job.id] || []).map((msg: any) => (
+                        <div key={msg.id} className={`flex ${msg.sender_role === 'worker' ? 'justify-end' : 'justify-start'}`}>
+                          <div className={`max-w-[80%] px-3 py-2 rounded-xl text-xs leading-relaxed ${
+                            msg.sender_role === 'worker' ? 'bg-zinc-900 text-white rounded-br-sm' : 'bg-zinc-100 text-zinc-900 rounded-bl-sm'
+                          }`}>
+                            {msg.photo_url && (
+                              <img src={msg.photo_url} alt="attachment" className="rounded-lg mb-1 max-h-32 object-cover" />
+                            )}
+                            {msg.message && <p className="whitespace-pre-wrap">{msg.message}</p>}
+                            <p className="text-[9px] mt-1 opacity-60">
+                              {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            </p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <input type="text" value={jobMessageDrafts[job.id] || ''}
+                        onChange={e => setJobMessageDrafts(prev => ({ ...prev, [job.id]: e.target.value }))}
+                        onKeyDown={e => { if (e.key === 'Enter') sendJobMessage(job.id); }}
+                        placeholder="Message the office..."
+                        className="flex-1 border border-zinc-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-zinc-900 transition" />
+                      <label className="p-2 border border-zinc-200 rounded-xl cursor-pointer hover:bg-zinc-50 transition shrink-0">
+                        <Camera className="w-3.5 h-3.5 text-zinc-500" />
+                        <input type="file" accept="image/*" className="hidden"
+                          onChange={e => e.target.files?.[0] && sendJobMessage(job.id, e.target.files[0])} />
+                      </label>
+                      <button onClick={() => sendJobMessage(job.id)}
+                        disabled={!jobMessageDrafts[job.id]?.trim() || sendingMessage === job.id}
+                        className="p-2 bg-zinc-900 text-white rounded-xl hover:bg-zinc-700 transition cursor-pointer disabled:opacity-40 shrink-0">
+                        <Send className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                )}
 
                 {/* Actions */}
                 {job.worker_status !== 'completed' && (
