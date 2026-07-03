@@ -80,6 +80,7 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
   const [uploadingPhoto, setUploadingPhoto] = useState<{ id: string; type: 'before' | 'after' } | null>(null);
   const photoInputRef = useRef<HTMLInputElement>(null);
   const [pendingPhotoMilestone, setPendingPhotoMilestone] = useState<{ id: string; type: 'before' | 'after' } | null>(null);
+  const [failedPhotos, setFailedPhotos] = useState<Record<string, { file: File; offline: boolean }>>({});
 
   // Message
   const [adminMessage, setAdminMessage] = useState('');
@@ -112,6 +113,7 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
   const [jobMessageDrafts, setJobMessageDrafts] = useState<Record<string, string>>({});
   const [sendingMessage, setSendingMessage] = useState<string | null>(null);
   const [pendingPhotos, setPendingPhotos] = useState<Record<string, { file: File; previewUrl: string }>>({});
+  const [failedJobPhoto, setFailedJobPhoto] = useState<Record<string, { file: File; text: string; offline: boolean }>>({});
   const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
   const openThreadsRef = useRef<Record<string, boolean>>({});
   useEffect(() => { openThreadsRef.current = openThreads; }, [openThreads]);
@@ -458,8 +460,14 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !pendingPhotoMilestone) return;
-    setUploadingPhoto(pendingPhotoMilestone);
-    const { id, type } = pendingPhotoMilestone;
+    await uploadMilestonePhoto(pendingPhotoMilestone.id, pendingPhotoMilestone.type, file);
+    setPendingPhotoMilestone(null);
+    if (photoInputRef.current) photoInputRef.current.value = '';
+  };
+
+  const uploadMilestonePhoto = async (id: string, type: 'before' | 'after', file: File) => {
+    const key = `${id}-${type}`;
+    setUploadingPhoto({ id, type });
     const path = `${portalId}/${id}/${type}-${Date.now()}.${file.name.split('.').pop()}`;
     try {
       const { error } = await supabase.storage.from('milestone-photos').upload(path, file, { upsert: true });
@@ -469,8 +477,19 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
       await supabase.from('portal_milestones').update({ [field]: urlData.publicUrl }).eq('id', id);
       setMilestones(prev => prev.map(m => m.id === id ? { ...m, [field]: urlData.publicUrl } : m));
       await logActivity('photo_uploaded', `${type === 'before' ? 'Before' : 'After'} photo uploaded`);
-    } catch (err: any) { alert('Photo upload failed: ' + err.message); }
-    finally { setUploadingPhoto(null); setPendingPhotoMilestone(null); if (photoInputRef.current) photoInputRef.current.value = ''; }
+      setFailedPhotos(prev => { const next = { ...prev }; delete next[key]; return next; });
+    } catch (err: any) {
+      setFailedPhotos(prev => ({ ...prev, [key]: { file, offline: !navigator.onLine } }));
+    } finally {
+      setUploadingPhoto(null);
+    }
+  };
+
+  const retryMilestonePhoto = (id: string, type: 'before' | 'after') => {
+    const key = `${id}-${type}`;
+    const pending = failedPhotos[key];
+    if (!pending) return;
+    uploadMilestonePhoto(id, type, pending.file);
   };
 
   // ── Templates ────────────────────────────────────────────
@@ -657,7 +676,11 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
         body: JSON.stringify({ milestoneId, message: text || 'Sent a photo' }),
       }).catch(() => {});
     } catch (err: any) {
-      alert('Error sending message: ' + err.message);
+      if (pending) {
+        setFailedJobPhoto(prev => ({ ...prev, [milestoneId]: { file: pending.file, text, offline: !navigator.onLine } }));
+      } else {
+        alert('Error sending message: ' + err.message);
+      }
     } finally {
       setSendingMessage(null);
     }
@@ -1080,20 +1103,30 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
 
                   {/* Before/After photos */}
                   {!isReadOnly && (
-                    <div className="mt-3 flex gap-2">
-                      <button onClick={() => triggerPhotoUpload(m.id, 'before')}
-                        disabled={!!uploadingPhoto}
-                        className="flex items-center gap-1.5 text-[10px] font-bold text-zinc-400 hover:text-zinc-700 transition cursor-pointer disabled:opacity-40">
-                        <Camera className="w-3.5 h-3.5" />
-                        {uploadingPhoto?.id === m.id && uploadingPhoto?.type === 'before' ? 'Uploading...' : m.photo_before_url ? 'Before ✓' : 'Before photo'}
-                      </button>
-                      <span className="text-zinc-200">·</span>
-                      <button onClick={() => triggerPhotoUpload(m.id, 'after')}
-                        disabled={!!uploadingPhoto}
-                        className="flex items-center gap-1.5 text-[10px] font-bold text-zinc-400 hover:text-zinc-700 transition cursor-pointer disabled:opacity-40">
-                        <Camera className="w-3.5 h-3.5" />
-                        {uploadingPhoto?.id === m.id && uploadingPhoto?.type === 'after' ? 'Uploading...' : m.photo_after_url ? 'After ✓' : 'After photo'}
-                      </button>
+                    <div className="mt-3 flex gap-2 flex-wrap">
+                      {(['before', 'after'] as const).map(type => {
+                        const key = `${m.id}-${type}`;
+                        const failed = failedPhotos[key];
+                        const isUploading = uploadingPhoto?.id === m.id && uploadingPhoto?.type === type;
+                        if (failed) {
+                          return (
+                            <button key={type} onClick={() => retryMilestonePhoto(m.id, type)}
+                              disabled={isUploading}
+                              className="flex items-center gap-1.5 text-[10px] font-bold text-amber-600 bg-amber-50 border border-amber-200 px-2 py-1 rounded-lg transition cursor-pointer disabled:opacity-50">
+                              <AlertTriangle className="w-3.5 h-3.5" />
+                              {isUploading ? 'Retrying...' : failed.offline ? 'No connection — tap to retry' : `${type} photo failed — tap to retry`}
+                            </button>
+                          );
+                        }
+                        return (
+                          <button key={type} onClick={() => triggerPhotoUpload(m.id, type)}
+                            disabled={!!uploadingPhoto}
+                            className="flex items-center gap-1.5 text-[10px] font-bold text-zinc-400 hover:text-zinc-700 transition cursor-pointer disabled:opacity-40">
+                            <Camera className="w-3.5 h-3.5" />
+                            {isUploading ? 'Uploading...' : (type === 'before' ? m.photo_before_url : m.photo_after_url) ? `${type === 'before' ? 'Before' : 'After'} ✓` : `${type === 'before' ? 'Before' : 'After'} photo`}
+                          </button>
+                        );
+                      })}
                     </div>
                   )}
 
@@ -1137,6 +1170,22 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
                           </div>
                         ))}
                       </div>
+                      {failedJobPhoto[m.id] && (
+                        <div className="flex items-center gap-2 mb-2 bg-amber-50 border border-amber-200 rounded-xl p-2">
+                          <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0" />
+                          <p className="text-[10px] text-amber-700 flex-1">
+                            {failedJobPhoto[m.id].offline ? 'No connection —' : 'Send failed —'} message with photo not sent
+                          </p>
+                          <button onClick={() => {
+                            const f = failedJobPhoto[m.id];
+                            setPendingPhotos(prev => ({ ...prev, [m.id]: { file: f.file, previewUrl: URL.createObjectURL(f.file) } }));
+                            setJobMessageDrafts(prev => ({ ...prev, [m.id]: f.text }));
+                            setFailedJobPhoto(prev => { const next = { ...prev }; delete next[m.id]; return next; });
+                          }} className="text-[10px] font-bold text-amber-700 underline cursor-pointer shrink-0">
+                            Retry
+                          </button>
+                        </div>
+                      )}
                       {pendingPhotos[m.id] && (
                         <div className="flex items-center gap-2 mb-2 bg-zinc-50 border border-zinc-200 rounded-xl p-2">
                           <img src={pendingPhotos[m.id].previewUrl} alt="Preview" className="w-10 h-10 object-cover rounded-lg shrink-0" />
