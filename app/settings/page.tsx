@@ -246,7 +246,7 @@ export default function SettingsPage() {
                 placeholder="colleague@company.com"
                 className="flex-1 min-w-0 border border-zinc-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-zinc-900 transition" />
               <select value={inviteRole} onChange={e => setInviteRole(e.target.value as 'admin' | 'user' | 'worker')}
-                className="border border-zinc-200 rounded-xl px-3 py-3 text-sm bg-white font-medium text-zinc-700 focus:outline-none w-28 shrink-0">
+                className="border border-zinc-200 rounded-xl px-3 py-3 text-sm bg-white font-medium text-zinc-700 focus:outline-none w-32 sm:w-28 shrink-0">
                 <option value="user">Viewer</option>
                 <option value="admin">Admin</option>
                 <option value="worker">Worker</option>
@@ -321,7 +321,7 @@ export default function SettingsPage() {
                       <select
                         value={member.role}
                         onChange={(e) => updateMemberRole(member.id, e.target.value)}
-                        className="text-[10px] border border-zinc-200 rounded px-1.5 py-1 bg-white text-zinc-600 focus:outline-none cursor-pointer w-20 shrink-0"
+                        className="text-[10px] border border-zinc-200 rounded px-2 py-1.5 bg-white text-zinc-600 focus:outline-none cursor-pointer w-24 sm:w-20 shrink-0"
                       >
                         <option value="user">Viewer</option>
                         <option value="admin">Admin</option>
