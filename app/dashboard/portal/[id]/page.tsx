@@ -111,7 +111,9 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
   const [jobMessages, setJobMessages] = useState<Record<string, any[]>>({});
   const [jobMessageDrafts, setJobMessageDrafts] = useState<Record<string, string>>({});
   const [sendingMessage, setSendingMessage] = useState<string | null>(null);
-  const jobChannelsRef = useRef<Record<string, any>>({});
+  const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
+  const openThreadsRef = useRef<Record<string, boolean>>({});
+  useEffect(() => { openThreadsRef.current = openThreads; }, [openThreads]);
 
   useEffect(() => {
     fetchAll();
@@ -124,6 +126,33 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
   }, [portalId]);
 
   useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [notes]);
+
+  useEffect(() => {
+    if (milestones.length === 0 || !currentUserId) return;
+    const milestoneIds = milestones.map(m => m.id);
+
+    (async () => {
+      const { data } = await supabase.from('job_messages').select('milestone_id')
+        .in('milestone_id', milestoneIds).eq('sender_role', 'worker').is('read_at', null);
+      const counts: Record<string, number> = {};
+      (data || []).forEach((row: any) => { counts[row.milestone_id] = (counts[row.milestone_id] || 0) + 1; });
+      setUnreadCounts(counts);
+    })();
+
+    const channel = supabase
+      .channel(`job-messages-portal-${portalId}`)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'job_messages', filter: `milestone_id=in.(${milestoneIds.join(',')})` },
+        (payload: any) => {
+          const msg = payload.new;
+          setJobMessages(prev => prev[msg.milestone_id] ? { ...prev, [msg.milestone_id]: [...prev[msg.milestone_id], msg] } : prev);
+          if (msg.sender_role === 'worker' && !openThreadsRef.current[msg.milestone_id]) {
+            setUnreadCounts(prev => ({ ...prev, [msg.milestone_id]: (prev[msg.milestone_id] || 0) + 1 }));
+          }
+        })
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [milestones, currentUserId, portalId]);
 
   useEffect(() => {
     const milestoneParam = searchParams?.get('milestone');
@@ -559,25 +588,20 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
 
   // ── Job Messages ─────────────────────────────────────────
   const toggleMessageThread = async (milestoneId: string) => {
-    if (openThreads[milestoneId]) {
-      setOpenThreads(prev => ({ ...prev, [milestoneId]: false }));
-      if (jobChannelsRef.current[milestoneId]) {
-        supabase.removeChannel(jobChannelsRef.current[milestoneId]);
-        delete jobChannelsRef.current[milestoneId];
-      }
-      return;
-    }
-    setOpenThreads(prev => ({ ...prev, [milestoneId]: true }));
-    const { data } = await supabase.from('job_messages').select('*')
-      .eq('milestone_id', milestoneId).order('created_at', { ascending: true });
-    setJobMessages(prev => ({ ...prev, [milestoneId]: data || [] }));
+    const opening = !openThreads[milestoneId];
+    setOpenThreads(prev => ({ ...prev, [milestoneId]: opening }));
+    if (!opening) return;
 
-    const channel = supabase
-      .channel(`job-messages-${milestoneId}`)
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'job_messages', filter: `milestone_id=eq.${milestoneId}` },
-        (payload) => setJobMessages(prev => ({ ...prev, [milestoneId]: [...(prev[milestoneId] || []), payload.new] })))
-      .subscribe();
-    jobChannelsRef.current[milestoneId] = channel;
+    if (!jobMessages[milestoneId]) {
+      const { data } = await supabase.from('job_messages').select('*')
+        .eq('milestone_id', milestoneId).order('created_at', { ascending: true });
+      setJobMessages(prev => ({ ...prev, [milestoneId]: data || [] }));
+    }
+
+    await supabase.from('job_messages').update({ read_at: new Date().toISOString() })
+      .eq('milestone_id', milestoneId).eq('sender_role', 'worker').is('read_at', null);
+
+    setUnreadCounts(prev => ({ ...prev, [milestoneId]: 0 }));
   };
 
   const sendJobMessage = async (milestoneId: string, photoFile?: File) => {
@@ -1010,8 +1034,13 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
                     <div className="flex items-center gap-1 shrink-0">
                       {m.assigned_worker_id && (
                         <button onClick={() => toggleMessageThread(m.id)}
-                          className="p-1.5 text-zinc-300 hover:text-zinc-600 transition cursor-pointer rounded-lg hover:bg-zinc-100">
+                          className="relative p-1.5 text-zinc-300 hover:text-zinc-600 transition cursor-pointer rounded-lg hover:bg-zinc-100">
                           <MessageSquare className="w-3.5 h-3.5" />
+                          {unreadCounts[m.id] > 0 && (
+                            <span className="absolute -top-1 -right-1 min-w-[14px] h-[14px] px-0.5 bg-red-500 text-white text-[8px] font-bold rounded-full flex items-center justify-center">
+                              {unreadCounts[m.id]}
+                            </span>
+                          )}
                         </button>
                       )}
                       {!isReadOnly && (
