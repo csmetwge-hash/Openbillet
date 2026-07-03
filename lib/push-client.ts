@@ -40,3 +40,40 @@ export async function subscribeToPush(): Promise<{ success: boolean; error?: str
   }
   return { success: true };
 }
+
+export async function unsubscribeFromPush(): Promise<{ success: boolean; error?: string }> {
+  if (!('serviceWorker' in navigator)) {
+    return { success: false, error: 'Not supported in this browser.' };
+  }
+
+  const registration = await navigator.serviceWorker.ready;
+  const subscription = await registration.pushManager.getSubscription();
+
+  if (!subscription) {
+    return { success: true };
+  }
+
+  const endpoint = subscription.endpoint;
+
+  const res = await fetch('/api/push/unsubscribe', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ endpoint }),
+  });
+
+  await subscription.unsubscribe();
+
+  if (!res.ok) {
+    const { error } = await res.json();
+    return { success: false, error };
+  }
+  return { success: true };
+}
+
+export async function checkPushSubscription(): Promise<boolean> {
+  if (!('serviceWorker' in navigator)) return false;
+  const registration = await navigator.serviceWorker.getRegistration();
+  if (!registration) return false;
+  const subscription = await registration.pushManager.getSubscription();
+  return !!subscription;
+}
