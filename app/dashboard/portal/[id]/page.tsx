@@ -463,13 +463,13 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
     const milestone = milestones.find(m => m.id === id);
     if (milestone?.assigned_worker_id) {
       const assignedWorker = workers.find(w => w.id === milestone.assigned_worker_id);
-      if (assignedWorker?.member_email) {
+      if (assignedWorker) {
         try {
           await fetch('/api/notify-worker', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              workerEmail: assignedWorker.member_email,
+              workerId: assignedWorker.id,
               jobTitle: milestone.title,
               scheduledAt: null,
               clientName: portal?.client_name,
@@ -516,13 +516,13 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
     ));
 
     const worker = workers.find(w => w.id === milestone.assigned_worker_id);
-    if (worker?.member_email) {
+    if (worker) {
       try {
         await fetch('/api/notify-worker', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            workerEmail: worker.member_email,
+            workerId: worker.id,
             jobTitle: milestone.title,
             scheduledAt: newScheduledAt,
             clientName: portal?.client_name,
