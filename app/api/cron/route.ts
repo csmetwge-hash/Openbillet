@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase-admin';
+import { sendPushToUser } from '@/lib/push-server';
 
 async function sendEmail(to: string, subject: string, html: string) {
   return fetch('https://api.resend.com/emails', {
@@ -161,6 +162,65 @@ export async function GET(request: Request) {
     return NextResponse.json({ success: true, timestamp: now, fired: logs.length, details: logs });
 
   } catch (err: any) {
+    // ── 3. Recurring service reminders (1-2 days ahead) ────────────────
+    const reminderWindowEnd = new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString();
+
+    const { data: upcomingRecurring } = await supabaseAdmin
+      .from('portal_milestones')
+      .select('id, title, scheduled_at, assigned_worker_id, client_portals(client_name, client_email, magic_token, project_name)')
+      .not('recurring_schedule_id', 'is', null)
+      .neq('status', 'completed')
+      .is('recurring_reminder_sent_at', null)
+      .gte('scheduled_at', now)
+      .lte('scheduled_at', reminderWindowEnd);
+
+    if (upcomingRecurring && upcomingRecurring.length > 0) {
+      for (const m of upcomingRecurring) {
+        const portalInfo = m.client_portals as any;
+        const whenStr = m.scheduled_at ? new Date(m.scheduled_at).toLocaleString('en-US', { weekday: 'long', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '';
+
+        if (portalInfo?.client_email) {
+          const portalLink = `${process.env.NEXT_PUBLIC_APP_URL}/portal/${portalInfo.magic_token}`;
+          await sendEmail(
+            portalInfo.client_email,
+            `Upcoming visit reminder — ${portalInfo.project_name}`,
+            `
+              <div style="font-family:sans-serif;background:#18181b;color:#f4f4f5;padding:32px;border-radius:16px;max-width:600px;">
+                <h2 style="color:#fff;font-size:18px;margin-bottom:4px;">Upcoming Visit Reminder</h2>
+                <hr style="border:0;border-top:1px solid #27272a;margin:20px 0;" />
+                <p style="font-size:14px;line-height:1.6;">Hello ${portalInfo.client_name},</p>
+                <p style="font-size:14px;line-height:1.6;">This is a reminder about your upcoming scheduled service:</p>
+                <div style="background:#27272a;padding:16px;border-radius:8px;font-weight:bold;font-size:14px;margin:20px 0;border-left:4px solid #3b82f6;">
+                  ${m.title}${whenStr ? `<br/><span style="font-weight:normal;font-size:12px;color:#a1a1aa;">${whenStr}</span>` : ''}
+                </div>
+                <a href="${portalLink}" style="display:inline-block;background:#fff;color:#09090b;padding:12px 24px;border-radius:8px;font-weight:bold;text-decoration:none;font-size:13px;">
+                  View Your Portal →
+                </a>
+              </div>
+            `
+          );
+        }
+
+        if (m.assigned_worker_id) {
+          const { data: worker } = await supabaseAdmin
+            .from('team_members')
+            .select('member_user_id')
+            .eq('id', m.assigned_worker_id)
+            .maybeSingle();
+          if (worker?.member_user_id) {
+            await sendPushToUser(worker.member_user_id, {
+              title: 'Upcoming job reminder',
+              body: `${m.title}${whenStr ? ` — ${whenStr}` : ''}`,
+              url: '/worker',
+            });
+          }
+        }
+
+        await supabaseAdmin.from('portal_milestones').update({ recurring_reminder_sent_at: now }).eq('id', m.id);
+        logs.push(`Recurring reminder dispatched: ${m.title}`);
+      }
+    }
+    
     return NextResponse.json({ success: false, error: err.message }, { status: 500 });
   }
 }
