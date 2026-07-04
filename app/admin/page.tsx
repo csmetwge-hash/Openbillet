@@ -239,7 +239,7 @@ export default function AdminPage() {
     e?.stopPropagation();
     const nextStatus = currentStatus === 'active' ? 'completed' : 'active';
     const msg = nextStatus === 'completed'
-      ? 'Archive this portal? All data will be preserved.'
+      ? 'Mark this client as complete and archive their portal? All data will be preserved, and they can be restored to active at any time.'
       : 'Restore this portal to active?';
     if (!confirm(msg)) return;
     const { error } = await supabase.from('client_portals').update({ status: nextStatus }).eq('id', portalId);
@@ -630,7 +630,14 @@ export default function AdminPage() {
                     >
                       <div className="flex items-start justify-between gap-4">
                         <div className="min-w-0">
-                          <h3 className="text-sm font-black text-zinc-900">{p.client_name}</h3>
+                          <div className="flex items-center gap-2">
+                            <h3 className="text-sm font-black text-zinc-900">{p.client_name}</h3>
+                            <span className={`text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full shrink-0 ${
+                              p.status === 'active' ? 'bg-emerald-50 text-emerald-600' : 'bg-zinc-100 text-zinc-500'
+                            }`}>
+                              {p.status === 'active' ? 'Active' : 'Complete & Archived'}
+                            </span>
+                          </div>
                           <p className="text-xs text-zinc-500 mt-0.5">{p.project_name}</p>
                         </div>
 
@@ -777,8 +784,8 @@ export default function AdminPage() {
                                 : 'border-zinc-200 text-zinc-400 hover:border-emerald-200 hover:text-emerald-600 hover:bg-emerald-50'
                             }`}>
                             {p.status === 'active'
-                              ? <><Archive className="w-3.5 h-3.5" /> Archive</>
-                              : <><RotateCcw className="w-3.5 h-3.5" /> Restore</>
+                              ? <><Archive className="w-3.5 h-3.5" /> Mark Complete & Archive</>
+                              : <><RotateCcw className="w-3.5 h-3.5" /> Restore to Active</>
                             }
                           </button>
                         </div>
