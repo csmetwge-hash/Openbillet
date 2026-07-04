@@ -743,11 +743,9 @@ export default function AdminPage() {
                             </div>
                           )}
                           {hasMoreMilestones && (
-                            <button
-                            onClick={(e) => { e.stopPropagation(); router.push(`/dashboard/portal/${p.id}`); }}
-                            className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider bg-zinc-900 text-white px-3 py-2 rounded-xl hover:bg-zinc-700 transition cursor-pointer">
-                            <Settings className="w-3.5 h-3.5" /> Open Full View
-                          </button>
+                            <p className="text-[10px] text-zinc-400 italic">
+                              +{allIncompleteMilestones.length - 3} more incomplete — see full view below
+                            </p>
                           )}
                           {completedMilestonesList.length > 0 && (
                             <details className="text-xs">
