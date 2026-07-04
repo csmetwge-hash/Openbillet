@@ -25,11 +25,19 @@ interface MilestoneForm {
   client_action_needed: string;
   scheduled_at: string;
   assigned_worker_id: string;
+  is_recurring: boolean;
+  recurring_interval_unit: 'day' | 'week' | 'month';
+  recurring_interval_count: string;
+  recurring_end_type: 'never' | 'date' | 'count';
+  recurring_end_date: string;
+  recurring_max_occurrences: string;
 }
 
 const emptyForm: MilestoneForm = {
   title: '', description: '', amount: '', payment_link: '', client_action_needed: '',
   scheduled_at: '', assigned_worker_id: '',
+  is_recurring: false, recurring_interval_unit: 'week', recurring_interval_count: '1',
+  recurring_end_type: 'never', recurring_end_date: '', recurring_max_occurrences: '',
 };
 
 export default function AdminPortalWorkspace({ params }: { params: Promise<{ id: string }> }) {
@@ -53,6 +61,7 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
   const milestoneRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const searchParams = useSearchParams();
   const [highlightedMilestoneId, setHighlightedMilestoneId] = useState<string | null>(null);
+  const [recurringSchedules, setRecurringSchedules] = useState<any[]>([]);
 
   // Milestone form
   const [showMilestoneForm, setShowMilestoneForm] = useState(false);
@@ -169,9 +178,12 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
     }
   }, [milestones, searchParams]);
 
+  const [ownerUserId, setOwnerUserId] = useState<string | null>(null);
+
   const fetchAll = async () => {
     const { ownerId, role, currentUserId: uid } = await resolveWorkspaceAccess();
     setCurrentUserId(uid);
+    setOwnerUserId(ownerId);
     if (role === 'worker') { router.push('/worker'); return; }
     if (!ownerId) { router.push('/auth'); return; }
     setUserRole(role);
@@ -188,7 +200,7 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
       notes: portalData.notes || '',
     });
 
-    const [ms, fs, ns, ps, ac, tmpl, wk] = await Promise.all([
+    const [ms, fs, ns, ps, ac, tmpl, wk, rs] = await Promise.all([
       supabase.from('portal_milestones').select('*').eq('portal_id', portalData.id).order('created_at', { ascending: true }),
       supabase.from('portal_files').select('*').eq('portal_id', portalData.id).order('created_at', { ascending: false }),
       supabase.from('portal_notes').select('*').eq('portal_id', portalData.id).order('created_at', { ascending: true }),
@@ -196,7 +208,9 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
       supabase.from('portal_activity').select('*').eq('portal_id', portalData.id).order('created_at', { ascending: false }),
       supabase.from('milestone_templates').select('*').eq('user_id', ownerId).order('created_at', { ascending: false }),
       supabase.from('team_members').select('id, member_email').eq('owner_user_id', ownerId).eq('role', 'worker').eq('status', 'active'),
+      supabase.from('recurring_schedules').select('*').eq('portal_id', portalData.id).order('created_at', { ascending: false }),
     ]);
+    setRecurringSchedules(rs.data || []);
 
     setMilestones(ms.data || []);
     setFiles(fs.data || []);
@@ -275,7 +289,7 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
   };
 
   // ── Milestone form helpers ───────────────────────────────
-  const updateForm = (field: keyof MilestoneForm, value: string) => {
+  const updateForm = (field: keyof MilestoneForm, value: string | boolean) => {
     setMilestoneForm(prev => ({ ...prev, [field]: value }));
   };
 
@@ -290,6 +304,7 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
     if (isReadOnly) return;
     setEditingMilestoneId(m.id);
     setMilestoneForm({
+      ...emptyForm,
       title: m.title || '', description: m.description || '',
       amount: m.amount || '', payment_link: m.payment_link || '',
       client_action_needed: m.client_action_needed || '',
@@ -310,6 +325,18 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
     }
   };
 
+  const deleteRecurringSchedule = async (id: string) => {
+    if (!confirm('Delete this recurring schedule? Already-created jobs will stay as-is; no new ones will be generated.')) return;
+    await supabase.from('recurring_schedules').delete().eq('id', id);
+    setRecurringSchedules(prev => prev.filter(s => s.id !== id));
+  };
+
+  const togglePauseSchedule = async (id: string, currentStatus: string) => {
+    const nextStatus = currentStatus === 'active' ? 'paused' : 'active';
+    await supabase.from('recurring_schedules').update({ status: nextStatus }).eq('id', id);
+    setRecurringSchedules(prev => prev.map(s => s.id === id ? { ...s, status: nextStatus } : s));
+  };
+
   const saveMilestone = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!milestoneForm.title.trim() || isReadOnly) return;
@@ -323,7 +350,26 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
     if (editingMilestoneId) {
       await supabase.from('portal_milestones').update(payload).eq('id', editingMilestoneId);
     } else {
-      await supabase.from('portal_milestones').insert({ ...payload, portal_id: portalId, status: 'incomplete' });
+      let recurringScheduleId: string | null = null;
+      if (milestoneForm.is_recurring && formScheduleDate && ownerUserId) {
+        const { data: sched } = await supabase.from('recurring_schedules').insert({
+          portal_id: portalId,
+          owner_user_id: ownerUserId,
+          title: milestoneForm.title,
+          description: milestoneForm.description || null,
+          amount: milestoneForm.amount || null,
+          payment_link: milestoneForm.payment_link || null,
+          assigned_worker_id: milestoneForm.assigned_worker_id || null,
+          interval_unit: milestoneForm.recurring_interval_unit,
+          interval_count: parseInt(milestoneForm.recurring_interval_count) || 1,
+          end_date: milestoneForm.recurring_end_type === 'date' && milestoneForm.recurring_end_date
+            ? new Date(milestoneForm.recurring_end_date).toISOString() : null,
+          max_occurrences: milestoneForm.recurring_end_type === 'count' && milestoneForm.recurring_max_occurrences
+            ? parseInt(milestoneForm.recurring_max_occurrences) : null,
+        }).select('id').single();
+        recurringScheduleId = sched?.id || null;
+      }
+      await supabase.from('portal_milestones').insert({ ...payload, portal_id: portalId, status: 'incomplete', recurring_schedule_id: recurringScheduleId });
       await logActivity('milestone_added', `Milestone added: ${milestoneForm.title}`);
       if (milestoneForm.client_action_needed.trim()) {
         await notifyClient('milestone_client_action', `${milestoneForm.title} — ${milestoneForm.client_action_needed}`);
@@ -891,6 +937,37 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
         {/* MILESTONES */}
         {activeTab === 'milestones' && (
           <>
+            {recurringSchedules.length > 0 && (
+              <div className="space-y-2">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">Recurring Services</p>
+                {recurringSchedules.filter(s => s.status !== 'finished').map(s => (
+                  <div key={s.id} className="flex items-center gap-2 p-3 bg-zinc-50 border border-zinc-100 rounded-xl">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-semibold text-zinc-800 truncate">{s.title}</p>
+                      <p className="text-[10px] text-zinc-400 mt-0.5">
+                        Every {s.interval_count} {s.interval_unit}{s.interval_count > 1 ? 's' : ''}
+                        {s.end_date ? ` · until ${new Date(s.end_date).toLocaleDateString()}` : s.max_occurrences ? ` · ${s.occurrences_created}/${s.max_occurrences} occurrences` : ' · no end date'}
+                      </p>
+                    </div>
+                    <span className={`text-[9px] font-bold uppercase px-2 py-0.5 rounded-full shrink-0 ${
+                      s.status === 'active' ? 'bg-emerald-50 text-emerald-600' : 'bg-zinc-200 text-zinc-500'
+                    }`}>{s.status}</span>
+                    {!isReadOnly && (
+                      <div className="flex items-center gap-1 shrink-0">
+                        <button onClick={() => togglePauseSchedule(s.id, s.status)}
+                          className="text-[10px] font-bold uppercase text-zinc-500 hover:text-zinc-800 px-2 py-1.5 rounded-lg hover:bg-zinc-100 transition cursor-pointer">
+                          {s.status === 'active' ? 'Pause' : 'Resume'}
+                        </button>
+                        <button onClick={() => deleteRecurringSchedule(s.id)}
+                          className="p-1.5 text-zinc-300 hover:text-red-400 transition cursor-pointer rounded-lg hover:bg-red-50">
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
             {!isReadOnly && (
               <div className="flex gap-2">
                 <button onClick={openAddForm}
@@ -1002,6 +1079,64 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
                     </select>
                   </div>
                 </div>
+                {!editingMilestoneId && formScheduleDate && (
+                  <div className="border border-zinc-200 rounded-xl p-3 space-y-3">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input type="checkbox" checked={milestoneForm.is_recurring}
+                        onChange={e => updateForm('is_recurring', e.target.checked)}
+                        className="w-4 h-4 rounded border-zinc-300 cursor-pointer" />
+                      <span className="text-xs font-bold text-zinc-700">Make this recurring</span>
+                    </label>
+                    {milestoneForm.is_recurring && (
+                      <div className="space-y-3 pl-6">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-zinc-500">Every</span>
+                          <input type="number" min={1} value={milestoneForm.recurring_interval_count}
+                            onChange={e => updateForm('recurring_interval_count', e.target.value)}
+                            className="w-16 border border-zinc-200 rounded-lg px-2 py-1.5 text-sm text-center focus:outline-none focus:border-zinc-900" />
+                          <select value={milestoneForm.recurring_interval_unit}
+                            onChange={e => updateForm('recurring_interval_unit', e.target.value)}
+                            className="border border-zinc-200 rounded-lg px-2 py-1.5 text-sm bg-white focus:outline-none">
+                            <option value="day">Day(s)</option>
+                            <option value="week">Week(s)</option>
+                            <option value="month">Month(s)</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-1.5">Ends</label>
+                          <div className="flex flex-col gap-2">
+                            <label className="flex items-center gap-2 cursor-pointer text-xs text-zinc-600">
+                              <input type="radio" name="recurring_end" checked={milestoneForm.recurring_end_type === 'never'}
+                                onChange={() => updateForm('recurring_end_type', 'never')} />
+                              Never
+                            </label>
+                            <label className="flex items-center gap-2 cursor-pointer text-xs text-zinc-600">
+                              <input type="radio" name="recurring_end" checked={milestoneForm.recurring_end_type === 'date'}
+                                onChange={() => updateForm('recurring_end_type', 'date')} />
+                              On date
+                              {milestoneForm.recurring_end_type === 'date' && (
+                                <input type="date" value={milestoneForm.recurring_end_date}
+                                  onChange={e => updateForm('recurring_end_date', e.target.value)}
+                                  className="border border-zinc-200 rounded-lg px-2 py-1 text-xs focus:outline-none focus:border-zinc-900" />
+                              )}
+                            </label>
+                            <label className="flex items-center gap-2 cursor-pointer text-xs text-zinc-600">
+                              <input type="radio" name="recurring_end" checked={milestoneForm.recurring_end_type === 'count'}
+                                onChange={() => updateForm('recurring_end_type', 'count')} />
+                              After
+                              {milestoneForm.recurring_end_type === 'count' && (
+                                <input type="number" min={1} value={milestoneForm.recurring_max_occurrences}
+                                  onChange={e => updateForm('recurring_max_occurrences', e.target.value)}
+                                  className="w-16 border border-zinc-200 rounded-lg px-2 py-1 text-xs text-center focus:outline-none focus:border-zinc-900" />
+                              )}
+                              {milestoneForm.recurring_end_type === 'count' && <span>occurrences</span>}
+                            </label>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
                 <div className="flex gap-2 pt-1">
                   <button onClick={saveMilestone as any} disabled={!milestoneForm.title.trim()}
                     className="flex-1 bg-zinc-900 text-white py-3 rounded-xl text-sm font-bold hover:bg-zinc-700 transition cursor-pointer disabled:opacity-40">
