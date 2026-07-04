@@ -165,7 +165,7 @@ export async function GET(request: Request) {
     // ── 3. Recurring service reminders (1-2 days ahead) ────────────────
     const reminderWindowEnd = new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString();
 
-    const { data: upcomingRecurring } = await supabaseAdmin
+    const { data: upcomingRecurring, error: recurringErr } = await supabaseAdmin
       .from('portal_milestones')
       .select('id, title, scheduled_at, assigned_worker_id, client_portals(client_name, client_email, magic_token, project_name)')
       .not('recurring_schedule_id', 'is', null)
@@ -173,6 +173,10 @@ export async function GET(request: Request) {
       .is('recurring_reminder_sent_at', null)
       .gte('scheduled_at', now)
       .lte('scheduled_at', reminderWindowEnd);
+
+    if (recurringErr) {
+      logs.push(`Recurring reminder query error: ${recurringErr.message}`);
+    }
 
     if (upcomingRecurring && upcomingRecurring.length > 0) {
       for (const m of upcomingRecurring) {
@@ -220,7 +224,7 @@ export async function GET(request: Request) {
         logs.push(`Recurring reminder dispatched: ${m.title}`);
       }
     }
-    
+
     return NextResponse.json({ success: false, error: err.message }, { status: 500 });
   }
 }
