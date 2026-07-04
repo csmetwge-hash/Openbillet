@@ -32,6 +32,8 @@ interface Milestone {
   payment_link?: string;
   status: string;
   worker_status?: string | null;
+  photo_before_url?: string | null;
+  photo_after_url?: string | null;
   client_action_needed?: string;
   scheduled_at?: string | null;
   assigned_worker_id?: string | null;
@@ -60,7 +62,6 @@ interface ScheduledJob {
 const STATUS_OPTIONS = [
   { value: 'incomplete', label: 'Incomplete' },
   { value: 'in_progress', label: 'In Progress' },
-  { value: 'completed', label: 'Completed' },
 ];
 
 export default function AdminPage() {
@@ -132,7 +133,7 @@ export default function AdminPage() {
           .eq('portal_id', p.id).eq('is_from_client', true)
           .order('created_at', { ascending: false }).limit(1),
         supabase.from('portal_proposals').select('id').eq('portal_id', p.id).in('status', ['accepted', 'declined']),
-        supabase.from('portal_milestones').select('id, title, description, amount, payment_link, status, client_action_needed, scheduled_at, assigned_worker_id').eq('portal_id', p.id).order('created_at', { ascending: true }),
+        supabase.from('portal_milestones').select('id, title, description, amount, payment_link, status, worker_status, photo_before_url, photo_after_url, client_action_needed, scheduled_at, assigned_worker_id').eq('portal_id', p.id).order('created_at', { ascending: true }),
       ]);
       const milestones = milestonesRes.data || [];
       meta[p.id] = {
@@ -150,7 +151,7 @@ export default function AdminPage() {
   const refreshPortalMilestones = async (portalId: string) => {
     const { data } = await supabase
       .from('portal_milestones')
-      .select('id, title, description, amount, payment_link, status, client_action_needed, scheduled_at, assigned_worker_id')
+      .select('id, title, description, amount, payment_link, status, worker_status, photo_before_url, photo_after_url, client_action_needed, scheduled_at, assigned_worker_id')
       .eq('portal_id', portalId)
       .order('created_at', { ascending: true });
     setPortalMeta(prev => ({
@@ -279,6 +280,21 @@ export default function AdminPage() {
         });
       } catch (err) { console.error('Notify failed:', err); }
     }
+  };
+
+  const confirmAndCloseOut = async (portalId: string, milestoneId: string, title: string, hasPhotos: boolean) => {
+    await supabase.from('portal_milestones').update({ status: 'completed' }).eq('id', milestoneId);
+    await refreshPortalMilestones(portalId);
+    await supabase.from('portal_activity').insert({
+      portal_id: portalId, action_type: 'payment_confirmed', actor: 'admin', description: `Payment confirmed: ${title}`,
+    });
+    try {
+      await fetch('/api/notify-client', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ portalId, actionType: 'job_completed_paid', detail: title, hasPhotos }),
+      });
+    } catch (err) { console.error('Notify failed:', err); }
   };
 
   const openEditMilestone = (portalId: string, milestone: Milestone, e: React.MouseEvent) => {
@@ -703,14 +719,21 @@ export default function AdminPage() {
                                       </div>
                                     )}
                                   </div>
-                                  <select
-                                    value={m.status}
-                                    onChange={(e) => handleStatusChange(p.id, m.id, e.target.value, m.title)}
-                                    onClick={(e) => e.stopPropagation()}
-                                    className="text-[10px] border border-zinc-200 rounded-lg px-2 py-1.5 bg-white text-zinc-600 focus:outline-none cursor-pointer shrink-0"
-                                  >
-                                    {STATUS_OPTIONS.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
-                                  </select>
+                                  {m.worker_status === 'completed' ? (
+                                    <button onClick={(e) => { e.stopPropagation(); confirmAndCloseOut(p.id, m.id, m.title, !!(m.photo_before_url || m.photo_after_url)); }}
+                                      className="text-[10px] font-bold uppercase tracking-wider bg-zinc-900 text-white px-2.5 py-1.5 rounded-lg hover:bg-zinc-700 transition cursor-pointer shrink-0 flex items-center gap-1">
+                                      <CheckCircle2 className="w-3 h-3" /> Confirm & Close Out
+                                    </button>
+                                  ) : (
+                                    <select
+                                      value={m.status}
+                                      onChange={(e) => handleStatusChange(p.id, m.id, e.target.value, m.title)}
+                                      onClick={(e) => e.stopPropagation()}
+                                      className="text-[10px] border border-zinc-200 rounded-lg px-2 py-1.5 bg-white text-zinc-600 focus:outline-none cursor-pointer shrink-0"
+                                    >
+                                      {STATUS_OPTIONS.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+                                    </select>
+                                  )}
                                   <button onClick={(e) => openEditMilestone(p.id, m, e)}
                                     className="p-1.5 text-zinc-400 hover:text-zinc-700 hover:bg-zinc-200 rounded-lg transition cursor-pointer shrink-0">
                                     <Pencil className="w-3.5 h-3.5" />
