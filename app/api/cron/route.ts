@@ -177,6 +177,7 @@ export async function GET(request: Request) {
     if (recurringErr) {
       logs.push(`Recurring reminder query error: ${recurringErr.message}`);
     }
+    logs.push(`Recurring check: now=${now}, windowEnd=${reminderWindowEnd}, found=${upcomingRecurring?.length ?? 'null'}`);
 
     if (upcomingRecurring && upcomingRecurring.length > 0) {
       for (const m of upcomingRecurring) {
