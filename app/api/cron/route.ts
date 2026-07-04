@@ -205,7 +205,7 @@ export async function GET(request: Request) {
         if (m.assigned_worker_id) {
           const { data: worker } = await supabaseAdmin
             .from('team_members')
-            .select('member_user_id')
+            .select('member_user_id, member_email')
             .eq('id', m.assigned_worker_id)
             .maybeSingle();
           if (worker?.member_user_id) {
@@ -214,6 +214,25 @@ export async function GET(request: Request) {
               body: `${m.title}${whenStr ? ` — ${whenStr}` : ''}`,
               url: '/worker',
             });
+          }
+          if (worker?.member_email) {
+            await sendEmail(
+              worker.member_email,
+              `Upcoming job reminder — ${m.title}`,
+              `
+                <div style="font-family:sans-serif;background:#18181b;color:#f4f4f5;padding:32px;border-radius:16px;max-width:600px;">
+                  <h2 style="color:#fff;font-size:18px;margin-bottom:4px;">Upcoming Job Reminder</h2>
+                  <hr style="border:0;border-top:1px solid #27272a;margin:20px 0;" />
+                  <p style="font-size:14px;line-height:1.6;">You have an upcoming scheduled job:</p>
+                  <div style="background:#27272a;padding:16px;border-radius:8px;font-weight:bold;font-size:14px;margin:20px 0;border-left:4px solid #3b82f6;">
+                    ${m.title}${whenStr ? `<br/><span style="font-weight:normal;font-size:12px;color:#a1a1aa;">${whenStr}</span>` : ''}
+                  </div>
+                  <a href="${process.env.NEXT_PUBLIC_APP_URL}/worker" style="display:inline-block;background:#fff;color:#09090b;padding:12px 24px;border-radius:8px;font-weight:bold;text-decoration:none;font-size:13px;">
+                    View Your Jobs →
+                  </a>
+                </div>
+              `
+            );
           }
         }
 
