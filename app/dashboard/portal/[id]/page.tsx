@@ -335,6 +335,20 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
     const nextStatus = currentStatus === 'active' ? 'paused' : 'active';
     await supabase.from('recurring_schedules').update({ status: nextStatus }).eq('id', id);
     setRecurringSchedules(prev => prev.map(s => s.id === id ? { ...s, status: nextStatus } : s));
+
+    if (nextStatus === 'active') {
+      const { data: pending } = await supabase.from('portal_milestones')
+        .select('id').eq('recurring_schedule_id', id).neq('status', 'completed').limit(1);
+      if (!pending || pending.length === 0) {
+        const { data: latest } = await supabase.from('portal_milestones')
+          .select('scheduled_at').eq('recurring_schedule_id', id)
+          .order('scheduled_at', { ascending: false }).limit(1).maybeSingle();
+        const baseDate = latest?.scheduled_at || new Date().toISOString();
+        await supabase.rpc('create_next_recurring_occurrence', { p_schedule_id: id, p_base_date: baseDate });
+        const { data: ms } = await supabase.from('portal_milestones').select('*').eq('portal_id', portalId).order('created_at', { ascending: true });
+        setMilestones(ms || []);
+      }
+    }
   };
 
   const saveMilestone = async (e: React.FormEvent) => {
