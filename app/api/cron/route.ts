@@ -159,9 +159,6 @@ export async function GET(request: Request) {
       }
     }
 
-    return NextResponse.json({ success: true, timestamp: now, fired: logs.length, details: logs });
-
-  } catch (err: any) {
     // ── 3. Recurring service reminders (1-2 days ahead) ────────────────
     const reminderWindowEnd = new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString();
 
@@ -177,7 +174,6 @@ export async function GET(request: Request) {
     if (recurringErr) {
       logs.push(`Recurring reminder query error: ${recurringErr.message}`);
     }
-    logs.push(`Recurring check: now=${now}, windowEnd=${reminderWindowEnd}, found=${upcomingRecurring?.length ?? 'null'}`);
 
     if (upcomingRecurring && upcomingRecurring.length > 0) {
       for (const m of upcomingRecurring) {
@@ -226,6 +222,9 @@ export async function GET(request: Request) {
       }
     }
 
+    return NextResponse.json({ success: true, timestamp: now, fired: logs.length, details: logs });
+
+  } catch (err: any) {
     return NextResponse.json({ success: false, error: err.message }, { status: 500 });
   }
 }
