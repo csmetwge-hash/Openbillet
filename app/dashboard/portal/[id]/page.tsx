@@ -516,6 +516,7 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
     ));
 
     const worker = workers.find(w => w.id === milestone.assigned_worker_id);
+    console.log('DEBUG reschedule notify:', { assignedWorkerId: milestone.assigned_worker_id, workersList: workers, foundWorker: worker });
     if (worker) {
       try {
         await fetch('/api/notify-worker', {
