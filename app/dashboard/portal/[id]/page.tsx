@@ -395,13 +395,13 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
       }
       if (milestoneForm.assigned_worker_id) {
         const assignedWorker = workers.find(w => w.id === milestoneForm.assigned_worker_id);
-        if (assignedWorker?.member_email) {
+        if (assignedWorker) {
           try {
             await fetch('/api/notify-worker', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
-              workerEmail: assignedWorker.member_email,
+              workerId: assignedWorker.id,
               jobTitle: milestoneForm.title,
               scheduledAt: formScheduleDate ? new Date(`${formScheduleDate}T${formScheduleTime || '00:00'}`).toISOString() : null,
               clientName: portal?.client_name,
