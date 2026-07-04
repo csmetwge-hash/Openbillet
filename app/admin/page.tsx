@@ -321,13 +321,13 @@ export default function AdminPage() {
     // Notify assigned worker before deleting
     if (milestone?.assigned_worker_id) {
       const assignedWorker = workers.find(w => w.id === milestone.assigned_worker_id);
-      if (assignedWorker?.member_email) {
+      if (assignedWorker) {
         try {
           await fetch('/api/notify-worker', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              workerEmail: assignedWorker.member_email,
+              workerId: assignedWorker.id,
               jobTitle: title,
               scheduledAt: null,
               clientName: portal?.client_name,
@@ -389,13 +389,13 @@ export default function AdminPage() {
 
       if (isNewAssignment || isReschedule) {
         const assignedWorker = workers.find(w => w.id === newWorker);
-        if (assignedWorker?.member_email) {
+        if (assignedWorker) {
           try {
             await fetch('/api/notify-worker', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
-                workerEmail: assignedWorker.member_email,
+                workerId: assignedWorker.id,
                 jobTitle: milestone.title,
                 scheduledAt: newScheduledAt,
                 clientName: portals.find(p => p.id === portalId)?.client_name,
