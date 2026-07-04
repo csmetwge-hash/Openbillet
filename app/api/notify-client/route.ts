@@ -46,6 +46,7 @@ export async function POST(req: Request) {
       milestone_canceled: `A scheduled item was canceled — ${portal.project_name}`,
       job_completed_paid: `Payment confirmed — ${portal.project_name}`,
       job_completed_awaiting_payment: `Job complete — payment required — ${portal.project_name}`,
+      job_completed_no_payment: `Job completed — ${portal.project_name}`,
     };
 
     const bodyLines: Record<string, string> = {
@@ -60,6 +61,7 @@ export async function POST(req: Request) {
       milestone_canceled: `An item on your project <strong>${portal.project_name}</strong> has been canceled${detail ? `: <strong>${detail}</strong>` : ''}.`,
       job_completed_paid: `Great news — the job <strong>${detail}</strong> has been completed and your payment has been received. Thank you!`,
       job_completed_awaiting_payment: `The job <strong>${detail}</strong> has been completed. Please visit your portal to complete your payment.`,
+      job_completed_no_payment: `Great news — the job <strong>${detail}</strong> has been completed.`,
     };
 
     const subject = subjects[actionType] || `Update on ${portal.project_name}`;
