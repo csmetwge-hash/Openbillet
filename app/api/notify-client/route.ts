@@ -108,7 +108,7 @@ export async function POST(req: Request) {
       portal_created: `Your private project workspace has been created. You can track progress, view files, and communicate with your project team here at any time.`,
       schedule_updated: `Your schedule has been <strong>updated</strong> for <strong>${portal.project_name}</strong>${safeDetail ? `: <strong>${safeDetail}</strong>` : ''}. Please check your portal for the new timeline.`,
       schedule_set: `A date has been <strong>scheduled</strong> for <strong>${portal.project_name}</strong>${safeDetail ? `: <strong>${safeDetail}</strong>` : ''}. Please check your portal for details.`,
-      milestone_added: `A new milestone has been added to your project <strong>${portal.project_name}</strong>${safeDetail ? `: <strong>${safeDetail}</strong>` : ''}.`,
+      milestone_added: `A new milestone has been added to your project <strong>${portal.project_name}</strong>${safeDetail ? `: <strong>${safeDetail}</strong>` : ''}. Log in to your portal to view the full details and any scheduling or payment information.`,
       milestone_canceled: `An item on your project <strong>${portal.project_name}</strong> has been canceled${safeDetail ? `: <strong>${safeDetail}</strong>` : ''}.`,
       job_completed_paid: `Great news — the job <strong>${safeDetail}</strong> has been completed and your payment has been received. Thank you!`,
       job_completed_awaiting_payment: `The job <strong>${safeDetail}</strong> has been completed. Please visit your portal to complete your payment.`,
