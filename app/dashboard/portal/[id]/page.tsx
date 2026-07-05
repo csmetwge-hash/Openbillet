@@ -439,11 +439,7 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
       if (milestoneForm.client_action_needed.trim()) {
         await notifyClient('milestone_client_action', `${milestoneForm.title} — ${milestoneForm.client_action_needed}`);
       }
-      if (formScheduleDate) {
-        const originalMilestone = editingMilestoneId ? milestones.find(m => m.id === editingMilestoneId) : null;
-        const hadDate = !!originalMilestone?.scheduled_at;
-        await notifyClient(hadDate ? 'schedule_updated' : 'schedule_set', milestoneForm.title);
-      }
+      await notifyClient(formScheduleDate ? 'schedule_set' : 'milestone_added', milestoneForm.title);
       if (milestoneForm.assigned_worker_id) {
         const assignedWorker = workers.find(w => w.id === milestoneForm.assigned_worker_id);
         if (assignedWorker) {
