@@ -297,6 +297,39 @@ export default function AdminPage() {
     } catch (err) { console.error('Notify failed:', err); }
   };
 
+  const quickCompleteMilestone = async (portalId: string, milestone: Milestone) => {
+    const hasPayment = !!(milestone.amount || milestone.payment_link);
+    const hasPhotos = !!(milestone.photo_before_url || milestone.photo_after_url);
+
+    if (hasPayment) {
+      await supabase.from('portal_milestones').update({ worker_status: 'completed' }).eq('id', milestone.id);
+      await refreshPortalMilestones(portalId);
+      await supabase.from('portal_activity').insert({
+        portal_id: portalId, action_type: 'milestone_completed', actor: 'admin', description: `Milestone completed, awaiting payment: ${milestone.title}`,
+      });
+      try {
+        await fetch('/api/notify-client', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ portalId, actionType: 'job_completed_awaiting_payment', detail: milestone.title, hasPhotos }),
+        });
+      } catch (err) { console.error('Notify failed:', err); }
+    } else {
+      await supabase.from('portal_milestones').update({ status: 'completed' }).eq('id', milestone.id);
+      await refreshPortalMilestones(portalId);
+      await supabase.from('portal_activity').insert({
+        portal_id: portalId, action_type: 'milestone_completed', actor: 'admin', description: `Milestone completed: ${milestone.title}`,
+      });
+      try {
+        await fetch('/api/notify-client', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ portalId, actionType: 'milestone_completed', detail: milestone.title, hasPhotos }),
+        });
+      } catch (err) { console.error('Notify failed:', err); }
+    }
+  };
+
   const openEditMilestone = (portalId: string, milestone: Milestone, e: React.MouseEvent) => {
     e.stopPropagation();
     setEditingMilestone({ portalId, milestone: { ...milestone } });
@@ -725,14 +758,21 @@ export default function AdminPage() {
                                       <CheckCircle2 className="w-3 h-3" /> Confirm & Close Out
                                     </button>
                                   ) : (
-                                    <select
-                                      value={m.status}
-                                      onChange={(e) => handleStatusChange(p.id, m.id, e.target.value, m.title)}
-                                      onClick={(e) => e.stopPropagation()}
-                                      className="text-[10px] border border-zinc-200 rounded-lg px-2 py-1.5 bg-white text-zinc-600 focus:outline-none cursor-pointer shrink-0"
-                                    >
-                                      {STATUS_OPTIONS.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
-                                    </select>
+                                    <div className="flex items-center gap-1 shrink-0">
+                                      <select
+                                        value={m.status}
+                                        onChange={(e) => handleStatusChange(p.id, m.id, e.target.value, m.title)}
+                                        onClick={(e) => e.stopPropagation()}
+                                        className="text-[10px] border border-zinc-200 rounded-lg px-2 py-1.5 bg-white text-zinc-600 focus:outline-none cursor-pointer"
+                                      >
+                                        {STATUS_OPTIONS.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+                                      </select>
+                                      <button onClick={(e) => { e.stopPropagation(); quickCompleteMilestone(p.id, m); }}
+                                        title="Mark complete"
+                                        className="p-1.5 text-zinc-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition cursor-pointer">
+                                        <CheckCircle2 className="w-3.5 h-3.5" />
+                                      </button>
+                                    </div>
                                   )}
                                   <button onClick={(e) => openEditMilestone(p.id, m, e)}
                                     className="p-1.5 text-zinc-400 hover:text-zinc-700 hover:bg-zinc-200 rounded-lg transition cursor-pointer shrink-0">
