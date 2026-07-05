@@ -150,7 +150,7 @@ export default function ClientPortal({ params }: { params: Promise<{ token: stri
       await fetch('/api/notify-admin', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ portalId: portal.id, actionType, clientName: portal.client_name, projectName: portal.project_name, detail }),
+        body: JSON.stringify({ portalId: portal.id, actionType, clientName: portal.client_name, projectName: portal.project_name, detail, magicToken: portal.magic_token }),
       });
     } catch (err) { console.error('Failed to notify admin:', err); }
   };
