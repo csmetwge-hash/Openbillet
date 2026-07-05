@@ -125,6 +125,8 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
   const [failedJobPhoto, setFailedJobPhoto] = useState<Record<string, { file: File; text: string; offline: boolean }>>({});
   const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
   const openThreadsRef = useRef<Record<string, boolean>>({});
+  const [unreadMessageCount, setUnreadMessageCount] = useState(0);
+
   useEffect(() => { openThreadsRef.current = openThreads; }, [openThreads]);
 
   useEffect(() => {
@@ -132,7 +134,12 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
     const notesChannel = supabase
       .channel(`admin-notes-${portalId}`)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'portal_notes', filter: `portal_id=eq.${portalId}` },
-        (payload) => setNotes(prev => [...prev, payload.new]))
+        (payload: any) => {
+          setNotes(prev => [...prev, payload.new]);
+          if (payload.new.is_from_client && activeTab !== 'messages') {
+            setUnreadMessageCount(prev => prev + 1);
+          }
+        })
       .subscribe();
     return () => { supabase.removeChannel(notesChannel); };
   }, [portalId]);
@@ -178,6 +185,15 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
     }
   }, [milestones, searchParams]);
 
+  useEffect(() => {
+    if (activeTab === 'messages' && unreadMessageCount > 0) {
+      setUnreadMessageCount(0);
+      supabase.from('portal_notes').update({ read_at: new Date().toISOString() })
+        .eq('portal_id', portalId).eq('is_from_client', true).is('read_at', null)
+        .then();
+    }
+  }, [activeTab]);
+
   const [ownerUserId, setOwnerUserId] = useState<string | null>(null);
 
   const fetchAll = async () => {
@@ -213,6 +229,8 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
     setRecurringSchedules(rs.data || []);
 
     setMilestones(ms.data || []);
+    const unreadCount = (ns.data || []).filter((n: any) => n.is_from_client && !n.read_at).length;
+    setUnreadMessageCount(unreadCount);
     setFiles(fs.data || []);
     setNotes(ns.data || []);
     setProposals((ps.data || []).map((p: any) => ({ ...p, line_items: p.proposal_line_items || [] })));
@@ -969,10 +987,15 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
           <div className="flex gap-1 overflow-x-auto scrollbar-none pb-1">
             {tabs.map(tab => (
               <button key={tab.key} onClick={() => setActiveTab(tab.key)}
-                className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition cursor-pointer ${
+                className={`relative flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition cursor-pointer ${
                   activeTab === tab.key ? 'bg-zinc-950 text-white' : 'text-zinc-500 hover:text-zinc-800 hover:bg-zinc-100'
                 }`}>
                 {tab.icon}{tab.label}
+                {tab.key === 'messages' && unreadMessageCount > 0 && (
+                  <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 bg-red-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center">
+                    {unreadMessageCount}
+                  </span>
+                )}
               </button>
             ))}
           </div>
