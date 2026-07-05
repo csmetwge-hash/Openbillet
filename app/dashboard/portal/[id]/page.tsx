@@ -362,7 +362,40 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
       assigned_worker_id: milestoneForm.assigned_worker_id || null,
     };
     if (editingMilestoneId) {
+      const originalMilestone = milestones.find(m => m.id === editingMilestoneId);
       await supabase.from('portal_milestones').update(payload).eq('id', editingMilestoneId);
+
+      const hadScheduledAt = originalMilestone?.scheduled_at || null;
+      const scheduleChanged = hadScheduledAt !== payload.scheduled_at;
+      const hadWorker = originalMilestone?.assigned_worker_id || null;
+      const newWorker = payload.assigned_worker_id;
+      const workerChanged = hadWorker !== newWorker;
+
+      if (scheduleChanged && payload.scheduled_at) {
+        await notifyClient(hadScheduledAt ? 'schedule_updated' : 'schedule_set', milestoneForm.title);
+      }
+
+      if (newWorker && (workerChanged || scheduleChanged)) {
+        const assignedWorker = workers.find(w => w.id === newWorker);
+        if (assignedWorker) {
+          try {
+            await fetch('/api/notify-worker', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                workerId: assignedWorker.id,
+                jobTitle: milestoneForm.title,
+                scheduledAt: payload.scheduled_at,
+                clientName: portal?.client_name,
+                projectName: portal?.project_name,
+                type: workerChanged ? 'assignment' : undefined,
+              }),
+            });
+          } catch (err) { console.error('Worker notify failed:', err); }
+        }
+      }
+
+      await logActivity('milestone_updated', `Milestone updated: ${milestoneForm.title}`);
     } else {
       let recurringScheduleId: string | null = null;
       if (milestoneForm.is_recurring && formScheduleDate && ownerUserId) {
@@ -516,7 +549,6 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
     ));
 
     const worker = workers.find(w => w.id === milestone.assigned_worker_id);
-    console.log('DEBUG reschedule notify:', { assignedWorkerId: milestone.assigned_worker_id, workersList: workers, foundWorker: worker });
     if (worker) {
       try {
         await fetch('/api/notify-worker', {
