@@ -31,6 +31,7 @@ interface Job {
   photo_after_url: string | null;
   portal_id: string;
   client_portals: PortalInfo | PortalInfo[] | null;
+  status: string;
 }
 
 function getPortalInfo(ref: PortalInfo | PortalInfo[] | null): PortalInfo | null {
@@ -113,10 +114,10 @@ export default function WorkerDashboard() {
     setLoading(false);
   };
 
-  const fetchJobs = async (id: string) => {
+ const fetchJobs = async (id: string) => {
     const { data } = await supabase
       .from('portal_milestones')
-      .select('id, title, description, payment_request, amount, payment_link, scheduled_at, worker_status, worker_note, photo_before_url, photo_after_url, portal_id, client_portals(client_name, project_name, client_address, client_phone)')
+      .select('id, title, description, payment_request, amount, payment_link, status, scheduled_at, worker_status, worker_note, photo_before_url, photo_after_url, portal_id, client_portals(client_name, project_name, client_address, client_phone)')
       .eq('assigned_worker_id', id)
       .order('scheduled_at', { ascending: true, nullsFirst: false });
 
@@ -308,8 +309,8 @@ export default function WorkerDashboard() {
     </div>
   );
 
-  const upcoming = jobs.filter(j => !['completed', 'no_show'].includes(j.worker_status || ''));
-  const history = jobs.filter(j => ['completed', 'no_show'].includes(j.worker_status || ''));
+  const upcoming = jobs.filter(j => j.status !== 'completed' && !['completed', 'no_show'].includes(j.worker_status || ''));
+  const history = jobs.filter(j => j.status === 'completed' || ['completed', 'no_show'].includes(j.worker_status || ''));
 
   return (
     <div className="min-h-screen bg-zinc-50 font-sans antialiased">
@@ -572,11 +573,11 @@ export default function WorkerDashboard() {
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
                       <span className={`text-[9px] font-bold uppercase tracking-wider px-2 py-1 rounded-lg ${
-                        job.worker_status === 'completed'
-                          ? 'bg-emerald-50 text-emerald-600 border border-emerald-100'
-                          : 'bg-rose-50 text-rose-600 border border-rose-100'
+                        job.worker_status === 'no_show'
+                          ? 'bg-rose-50 text-rose-600 border border-rose-100'
+                          : 'bg-emerald-50 text-emerald-600 border border-emerald-100'
                       }`}>
-                        {job.worker_status === 'completed' ? 'Completed' : 'No Show'}
+                        {job.worker_status === 'no_show' ? 'No Show' : 'Completed'}
                       </span>
                       <button
                         onClick={() => handleAction(job.id, 'undo')}
