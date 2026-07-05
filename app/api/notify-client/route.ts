@@ -96,6 +96,7 @@ export async function POST(req: Request) {
       job_completed_paid: `Payment confirmed — ${portal.project_name}`,
       job_completed_awaiting_payment: `Job complete — payment required — ${portal.project_name}`,
       job_completed_no_payment: `Job completed — ${portal.project_name}`,
+      milestone_added: `New milestone added — ${portal.project_name}`,
     };
 
     const bodyLines: Record<string, string> = {
@@ -105,8 +106,9 @@ export async function POST(req: Request) {
       file_uploaded: `A new file has been uploaded to your project portal for <strong>${portal.project_name}</strong>${safeDetail ? `: <strong>${safeDetail}</strong>` : ''}.`,
       milestone_client_action: `A milestone requires your attention on <strong>${portal.project_name}</strong>${safeDetail ? `: <strong>${safeDetail}</strong>` : ''}.`,
       portal_created: `Your private project workspace has been created. You can track progress, view files, and communicate with your project team here at any time.`,
-      schedule_updated: `Your schedule has been <strong>updated</strong> for <strong>${portal.project_name}</strong>. Please check your portal for the new timeline.`,
-      schedule_set: `A date has been <strong>scheduled</strong> for <strong>${portal.project_name}</strong>. Please check your portal for details.`,
+      schedule_updated: `Your schedule has been <strong>updated</strong> for <strong>${portal.project_name}</strong>${safeDetail ? `: <strong>${safeDetail}</strong>` : ''}. Please check your portal for the new timeline.`,
+      schedule_set: `A date has been <strong>scheduled</strong> for <strong>${portal.project_name}</strong>${safeDetail ? `: <strong>${safeDetail}</strong>` : ''}. Please check your portal for details.`,
+      milestone_added: `A new milestone has been added to your project <strong>${portal.project_name}</strong>${safeDetail ? `: <strong>${safeDetail}</strong>` : ''}.`,
       milestone_canceled: `An item on your project <strong>${portal.project_name}</strong> has been canceled${safeDetail ? `: <strong>${safeDetail}</strong>` : ''}.`,
       job_completed_paid: `Great news — the job <strong>${safeDetail}</strong> has been completed and your payment has been received. Thank you!`,
       job_completed_awaiting_payment: `The job <strong>${safeDetail}</strong> has been completed. Please visit your portal to complete your payment.`,
