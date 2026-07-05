@@ -1,11 +1,25 @@
 import { NextResponse } from 'next/server';
 import { Resend } from 'resend';
 import { supabaseAdmin } from '@/lib/supabase-admin';
+import { createServerClient } from '@supabase/ssr';
+import { cookies } from 'next/headers';
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
+function escapeHtml(str: string) {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
 export async function POST(req: Request) {
   try {
+    const internalSecret = req.headers.get('x-internal-secret');
+    const isInternalCall = internalSecret === process.env.INTERNAL_API_SECRET;
+
     const { portalId, actionType, detail, hasPhotos } = await req.json();
 
     if (!portalId || !actionType) {
@@ -19,7 +33,41 @@ export async function POST(req: Request) {
       .eq('id', portalId)
       .single();
 
-    if (!portal?.client_email) {
+    if (!portal) {
+      return NextResponse.json({ error: 'Portal not found.' }, { status: 404 });
+    }
+
+    if (!isInternalCall) {
+      const cookieStore = await cookies();
+      const supabase = createServerClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+        { cookies: { getAll() { return cookieStore.getAll(); }, setAll() {} } }
+      );
+      const { data: { user } } = await supabase.auth.getUser();
+
+      let authorized = false;
+      if (user) {
+        if (user.id === portal.user_id) {
+          authorized = true;
+        } else {
+          const { data: membership } = await supabaseAdmin
+            .from('team_members')
+            .select('role')
+            .eq('owner_user_id', portal.user_id)
+            .eq('member_user_id', user.id)
+            .eq('status', 'active')
+            .maybeSingle();
+          if (membership?.role === 'admin') authorized = true;
+        }
+      }
+
+      if (!authorized) {
+        return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 });
+      }
+    }
+
+    if (!portal.client_email) {
       // No client email on file — skip silently
       return NextResponse.json({ success: true, skipped: true });
     }
@@ -33,6 +81,7 @@ export async function POST(req: Request) {
 
     const brandName = portal.brand_name || settings?.brand_name || 'Your Project Team';
     const portalUrl = `${process.env.NEXT_PUBLIC_APP_URL}/portal/${portal.magic_token}`;
+    const safeDetail = detail ? escapeHtml(detail) : detail;
 
     const subjects: Record<string, string> = {
       message: `New message on ${portal.project_name}`,
@@ -52,16 +101,16 @@ export async function POST(req: Request) {
     const bodyLines: Record<string, string> = {
       message: `You have a new message from your project team regarding <strong>${portal.project_name}</strong>.`,
       proposal_sent: `A proposal is ready for your review on <strong>${portal.project_name}</strong>. Please review and accept or decline at your earliest convenience.`,
-      milestone_completed: `A milestone has been completed on <strong>${portal.project_name}</strong>${detail ? `: <strong>${detail}</strong>` : ''}.`,
-      file_uploaded: `A new file has been uploaded to your project portal for <strong>${portal.project_name}</strong>${detail ? `: <strong>${detail}</strong>` : ''}.`,
-      milestone_client_action: `A milestone requires your attention on <strong>${portal.project_name}</strong>${detail ? `: <strong>${detail}</strong>` : ''}.`,
+      milestone_completed: `A milestone has been completed on <strong>${portal.project_name}</strong>${safeDetail ? `: <strong>${safeDetail}</strong>` : ''}.`,
+      file_uploaded: `A new file has been uploaded to your project portal for <strong>${portal.project_name}</strong>${safeDetail ? `: <strong>${safeDetail}</strong>` : ''}.`,
+      milestone_client_action: `A milestone requires your attention on <strong>${portal.project_name}</strong>${safeDetail ? `: <strong>${safeDetail}</strong>` : ''}.`,
       portal_created: `Your private project workspace has been created. You can track progress, view files, and communicate with your project team here at any time.`,
       schedule_updated: `Your schedule has been <strong>updated</strong> for <strong>${portal.project_name}</strong>. Please check your portal for the new timeline.`,
       schedule_set: `A date has been <strong>scheduled</strong> for <strong>${portal.project_name}</strong>. Please check your portal for details.`,
-      milestone_canceled: `An item on your project <strong>${portal.project_name}</strong> has been canceled${detail ? `: <strong>${detail}</strong>` : ''}.`,
-      job_completed_paid: `Great news — the job <strong>${detail}</strong> has been completed and your payment has been received. Thank you!`,
-      job_completed_awaiting_payment: `The job <strong>${detail}</strong> has been completed. Please visit your portal to complete your payment.`,
-      job_completed_no_payment: `Great news — the job <strong>${detail}</strong> has been completed.`,
+      milestone_canceled: `An item on your project <strong>${portal.project_name}</strong> has been canceled${safeDetail ? `: <strong>${safeDetail}</strong>` : ''}.`,
+      job_completed_paid: `Great news — the job <strong>${safeDetail}</strong> has been completed and your payment has been received. Thank you!`,
+      job_completed_awaiting_payment: `The job <strong>${safeDetail}</strong> has been completed. Please visit your portal to complete your payment.`,
+      job_completed_no_payment: `Great news — the job <strong>${safeDetail}</strong> has been completed.`,
     };
 
     const subject = subjects[actionType] || `Update on ${portal.project_name}`;
