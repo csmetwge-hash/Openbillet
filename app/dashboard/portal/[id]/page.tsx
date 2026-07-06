@@ -384,7 +384,7 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
       await supabase.from('portal_milestones').update(payload).eq('id', editingMilestoneId);
 
       const hadScheduledAt = originalMilestone?.scheduled_at || null;
-      const scheduleChanged = hadScheduledAt !== payload.scheduled_at;
+      const scheduleChanged = (hadScheduledAt ? new Date(hadScheduledAt).getTime() : null) !== (payload.scheduled_at ? new Date(payload.scheduled_at).getTime() : null);
       const hadWorker = originalMilestone?.assigned_worker_id || null;
       const newWorker = payload.assigned_worker_id;
       const workerChanged = hadWorker !== newWorker;
