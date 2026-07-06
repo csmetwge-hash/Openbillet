@@ -164,7 +164,7 @@ export async function GET(request: Request) {
 
     const { data: upcomingRecurring, error: recurringErr } = await supabaseAdmin
       .from('portal_milestones')
-      .select('id, title, scheduled_at, assigned_worker_id, client_portals(client_name, client_email, magic_token, project_name)')
+      .select('id, title, scheduled_at, assigned_worker_id, client_portals(client_name, client_email, magic_token, project_name, user_id)')
       .neq('status', 'completed')
       .is('recurring_reminder_sent_at', null)
       .gte('scheduled_at', now)
@@ -228,6 +228,28 @@ export async function GET(request: Request) {
                   </div>
                   <a href="${process.env.NEXT_PUBLIC_APP_URL}/worker" style="display:inline-block;background:#fff;color:#09090b;padding:12px 24px;border-radius:8px;font-weight:bold;text-decoration:none;font-size:13px;">
                     View Your Jobs →
+                  </a>
+                </div>
+              `
+            );
+          }
+        } else {
+          const portalInfo = m.client_portals as any;
+          const ownerEmail = portalInfo?.user_id ? await getManagerEmail(portalInfo.user_id) : null;
+          if (ownerEmail) {
+            await sendEmail(
+              ownerEmail,
+              `Upcoming job reminder — ${m.title}`,
+              `
+                <div style="font-family:sans-serif;background:#18181b;color:#f4f4f5;padding:32px;border-radius:16px;max-width:600px;">
+                  <h2 style="color:#fff;font-size:18px;margin-bottom:4px;">Upcoming Job Reminder</h2>
+                  <hr style="border:0;border-top:1px solid #27272a;margin:20px 0;" />
+                  <p style="font-size:14px;line-height:1.6;">You have an upcoming scheduled job assigned to yourself:</p>
+                  <div style="background:#27272a;padding:16px;border-radius:8px;font-weight:bold;font-size:14px;margin:20px 0;border-left:4px solid #3b82f6;">
+                    ${m.title}${whenStr ? `<br/><span style="font-weight:normal;font-size:12px;color:#a1a1aa;">${whenStr}</span>` : ''}
+                  </div>
+                  <a href="${process.env.NEXT_PUBLIC_APP_URL}/admin" style="display:inline-block;background:#fff;color:#09090b;padding:12px 24px;border-radius:8px;font-weight:bold;text-decoration:none;font-size:13px;">
+                    View Control Center →
                   </a>
                 </div>
               `
