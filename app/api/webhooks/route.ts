@@ -49,6 +49,7 @@ export async function POST(req: Request) {
             stripe_price_id: process.env.STRIPE_PRICE_ID || '',
             tier_level: 'pro_unlimited', // single plan — always full access
             subscription_status: 'active',
+            status_changed_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
           },
           { onConflict: 'user_id' }
@@ -68,6 +69,7 @@ export async function POST(req: Request) {
         .from('manager_subscriptions')
         .update({
           subscription_status: isActive ? 'active' : 'inactive',
+          status_changed_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         })
         .eq('stripe_customer_id', customerId);
@@ -86,6 +88,7 @@ export async function POST(req: Request) {
           subscription_status: 'inactive',
           tier_level: 'none',
           stripe_subscription_id: null,
+          status_changed_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         })
         .eq('stripe_customer_id', customerId);
