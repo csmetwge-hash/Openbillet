@@ -165,7 +165,6 @@ export async function GET(request: Request) {
     const { data: upcomingRecurring, error: recurringErr } = await supabaseAdmin
       .from('portal_milestones')
       .select('id, title, scheduled_at, assigned_worker_id, client_portals(client_name, client_email, magic_token, project_name)')
-      .not('recurring_schedule_id', 'is', null)
       .neq('status', 'completed')
       .is('recurring_reminder_sent_at', null)
       .gte('scheduled_at', now)
