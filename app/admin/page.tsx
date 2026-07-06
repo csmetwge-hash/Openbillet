@@ -297,9 +297,29 @@ export default function AdminPage() {
     } catch (err) { console.error('Notify failed:', err); }
   };
 
+  const notifyWorkerAdminCompleted = async (portal: Portal, milestone: Milestone) => {
+    if (!milestone.assigned_worker_id) return;
+    const assignedWorker = workers.find(w => w.id === milestone.assigned_worker_id);
+    if (!assignedWorker) return;
+    try {
+      await fetch('/api/notify-worker', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          workerId: assignedWorker.id,
+          jobTitle: milestone.title,
+          clientName: portal.client_name,
+          projectName: portal.project_name,
+          type: 'completed_by_admin',
+        }),
+      });
+    } catch (err) { console.error('Worker completion notify failed:', err); }
+  };
+
   const quickCompleteMilestone = async (portalId: string, milestone: Milestone) => {
     const hasPayment = !!(milestone.amount || milestone.payment_link);
     const hasPhotos = !!(milestone.photo_before_url || milestone.photo_after_url);
+    const portal = portals.find(p => p.id === portalId);
 
     if (hasPayment) {
       await supabase.from('portal_milestones').update({ worker_status: 'completed' }).eq('id', milestone.id);
@@ -314,6 +334,7 @@ export default function AdminPage() {
           body: JSON.stringify({ portalId, actionType: 'job_completed_awaiting_payment', detail: milestone.title, hasPhotos }),
         });
       } catch (err) { console.error('Notify failed:', err); }
+      if (portal && milestone.worker_status !== 'completed') await notifyWorkerAdminCompleted(portal, milestone);
     } else {
       await supabase.from('portal_milestones').update({ status: 'completed' }).eq('id', milestone.id);
       await refreshPortalMilestones(portalId);
@@ -327,6 +348,7 @@ export default function AdminPage() {
           body: JSON.stringify({ portalId, actionType: 'milestone_completed', detail: milestone.title, hasPhotos }),
         });
       } catch (err) { console.error('Notify failed:', err); }
+      if (portal && milestone.worker_status !== 'completed') await notifyWorkerAdminCompleted(portal, milestone);
     }
   };
 
