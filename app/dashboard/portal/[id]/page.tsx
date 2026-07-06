@@ -477,6 +477,7 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
     setMilestones(prev => prev.map(x => x.id === m.id ? { ...x, status: 'completed' } : x));
     await logActivity('milestone_completed', `Milestone completed: ${m.title}`);
     await notifyClient('milestone_completed', m.title, !!(m.photo_before_url || m.photo_after_url));
+    if (m.worker_status !== 'completed') await notifyWorkerAdminCompleted(m);
   };
 
   const completeMilestonePaid = async (m: any) => {
@@ -485,6 +486,7 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
     setMilestones(prev => prev.map(x => x.id === m.id ? { ...x, status: 'completed' } : x));
     await logActivity('milestone_completed', `Milestone completed (payment collected): ${m.title}`);
     await notifyClient('job_completed_paid', m.title, !!(m.photo_before_url || m.photo_after_url));
+    if (m.worker_status !== 'completed') await notifyWorkerAdminCompleted(m);
   };
 
   const completeMilestoneAwaitingPayment = async (m: any) => {
@@ -493,6 +495,7 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
     setMilestones(prev => prev.map(x => x.id === m.id ? { ...x, worker_status: 'completed' } : x));
     await logActivity('milestone_completed', `Milestone completed, awaiting payment: ${m.title}`);
     await notifyClient('job_completed_awaiting_payment', m.title, !!(m.photo_before_url || m.photo_after_url));
+    if (m.worker_status !== 'completed') await notifyWorkerAdminCompleted(m);
   };
 
   const confirmPaymentReceived = async (m: any) => {
@@ -501,6 +504,25 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
     setMilestones(prev => prev.map(x => x.id === m.id ? { ...x, status: 'completed' } : x));
     await logActivity('payment_confirmed', `Payment confirmed: ${m.title}`);
     await notifyClient('job_completed_paid', m.title, !!(m.photo_before_url || m.photo_after_url));
+  };
+
+  const notifyWorkerAdminCompleted = async (m: any) => {
+    if (!m.assigned_worker_id) return;
+    const assignedWorker = workers.find(w => w.id === m.assigned_worker_id);
+    if (!assignedWorker) return;
+    try {
+      await fetch('/api/notify-worker', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          workerId: assignedWorker.id,
+          jobTitle: m.title,
+          clientName: portal?.client_name,
+          projectName: portal?.project_name,
+          type: 'completed_by_admin',
+        }),
+      });
+    } catch (err) { console.error('Worker completion notify failed:', err); }
   };
 
   const deleteMilestone = async (id: string) => {
