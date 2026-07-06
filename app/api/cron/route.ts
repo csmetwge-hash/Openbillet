@@ -241,8 +241,61 @@ export async function GET(request: Request) {
       }
     }
 
-    return NextResponse.json({ success: true, timestamp: now, fired: logs.length, details: logs });
+    // ── 4. Trial ending soon reminder (3 days out) ──────────────────────
+    const threeDaysFromNow = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString();
 
+    const { data: endingTrials } = await supabaseAdmin
+      .from('manager_subscriptions')
+      .select('user_id, trial_ends_at')
+      .eq('subscription_status', 'trial')
+      .is('trial_reminder_sent_at', null)
+      .lte('trial_ends_at', threeDaysFromNow)
+      .gte('trial_ends_at', now);
+
+    if (endingTrials && endingTrials.length > 0) {
+      for (const sub of endingTrials) {
+        const email = await getManagerEmail(sub.user_id);
+        const daysLeft = Math.ceil((new Date(sub.trial_ends_at).getTime() - Date.now()) / (24 * 60 * 60 * 1000));
+        if (email) {
+          await sendEmail(
+            email,
+            `Your OpenBillet trial ends in ${daysLeft} day${daysLeft === 1 ? '' : 's'}`,
+            `
+              <div style="font-family:sans-serif;background:#18181b;color:#f4f4f5;padding:32px;border-radius:16px;max-width:600px;">
+                <h2 style="color:#fff;font-size:18px;margin-bottom:4px;">Your Trial Is Ending Soon</h2>
+                <hr style="border:0;border-top:1px solid #27272a;margin:20px 0;" />
+                <p style="font-size:14px;line-height:1.6;">Your 14-day free trial ends in <strong>${daysLeft} day${daysLeft === 1 ? '' : 's'}</strong>. Subscribe now to keep uninterrupted access to your client portals, milestones, and team.</p>
+                <a href="${process.env.NEXT_PUBLIC_APP_URL}/billing" style="display:inline-block;background:#fff;color:#09090b;padding:12px 24px;border-radius:8px;font-weight:bold;text-decoration:none;font-size:13px;margin-top:8px;">
+                  Subscribe Now →
+                </a>
+              </div>
+            `
+          );
+        }
+        await supabaseAdmin.from('manager_subscriptions').update({ trial_reminder_sent_at: now }).eq('user_id', sub.user_id);
+        logs.push(`Trial reminder sent: ${sub.user_id}`);
+      }
+    }
+
+    // ── 5. Expire trials past their end date ────────────────────────────
+    const { data: expiredTrials } = await supabaseAdmin
+      .from('manager_subscriptions')
+      .select('user_id')
+      .eq('subscription_status', 'trial')
+      .lte('trial_ends_at', now);
+
+    if (expiredTrials && expiredTrials.length > 0) {
+      for (const sub of expiredTrials) {
+        await supabaseAdmin.from('manager_subscriptions').update({
+          subscription_status: 'trial_expired',
+          status_changed_at: now,
+        }).eq('user_id', sub.user_id);
+        logs.push(`Trial expired: ${sub.user_id}`);
+      }
+    }
+
+    return NextResponse.json({ success: true, timestamp: now, fired: logs.length, details: logs });
+    
   } catch (err: any) {
     return NextResponse.json({ success: false, error: err.message }, { status: 500 });
   }
