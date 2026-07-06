@@ -197,7 +197,8 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
   const [ownerUserId, setOwnerUserId] = useState<string | null>(null);
 
   const fetchAll = async () => {
-    const { ownerId, role, currentUserId: uid } = await resolveWorkspaceAccess();
+    const { ownerId, role, currentUserId: uid, blocked } = await resolveWorkspaceAccess();
+    if (blocked) { router.push('/billing'); return; }
     setCurrentUserId(uid);
     setOwnerUserId(ownerId);
     if (role === 'worker') { router.push('/worker'); return; }
