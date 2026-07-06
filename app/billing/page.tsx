@@ -3,12 +3,14 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, ExternalLink, CheckCircle2, AlertCircle } from 'lucide-react';
+import { ArrowLeft, ExternalLink, CheckCircle2, AlertCircle, Clock } from 'lucide-react';
 import Link from 'next/link';
 import AppShell from '@/components/AppShell';
 
 export default function BillingPage() {
   const [status, setStatus] = useState<string>('inactive');
+  const [trialEndsAt, setTrialEndsAt] = useState<string | null>(null);
+  const [statusChangedAt, setStatusChangedAt] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [checkoutLoading, setCheckoutLoading] = useState<string | null>(null);
   const [portalLoading, setPortalLoading] = useState(false);
@@ -20,10 +22,14 @@ export default function BillingPage() {
       if (!user) { router.push('/auth'); return; }
       const { data } = await supabase
         .from('manager_subscriptions')
-        .select('subscription_status')
+        .select('subscription_status, trial_ends_at, status_changed_at')
         .eq('user_id', user.id)
         .maybeSingle();
-      if (data) setStatus(data.subscription_status);
+      if (data) {
+        setStatus(data.subscription_status);
+        setTrialEndsAt(data.trial_ends_at);
+        setStatusChangedAt(data.status_changed_at);
+      }
       setLoading(false);
     };
     fetch();
@@ -71,6 +77,11 @@ export default function BillingPage() {
   );
 
   const isActive = status === 'active';
+  const isTrial = status === 'trial';
+  const isLapsed = status === 'trial_expired' || status === 'inactive';
+
+  const trialDaysLeft = trialEndsAt ? Math.ceil((new Date(trialEndsAt).getTime() - Date.now()) / (24 * 60 * 60 * 1000)) : null;
+  const graceDaysLeft = statusChangedAt ? Math.max(0, 3 - Math.floor((Date.now() - new Date(statusChangedAt).getTime()) / (24 * 60 * 60 * 1000))) : null;
 
   return (
     <AppShell>
@@ -108,10 +119,33 @@ export default function BillingPage() {
           </div>
         ) : (
           <div className="space-y-4">
-            <div className="flex items-center gap-3 bg-amber-50 border border-amber-200 text-amber-700 p-4 rounded-2xl text-xs font-semibold">
-              <AlertCircle className="w-4 h-4 shrink-0" />
-              <span>No active subscription. Choose a plan below.</span>
-            </div>
+            {isTrial && trialDaysLeft !== null && (
+              <div className="flex items-center gap-3 bg-blue-50 border border-blue-200 text-blue-700 p-4 rounded-2xl text-xs font-semibold">
+                <Clock className="w-4 h-4 shrink-0" />
+                <span>
+                  {trialDaysLeft > 0
+                    ? `Free trial — ${trialDaysLeft} day${trialDaysLeft === 1 ? '' : 's'} left. Subscribe now to avoid any interruption.`
+                    : `Your trial has ended.`}
+                </span>
+              </div>
+            )}
+            {isLapsed && (
+              <div className="flex items-center gap-3 bg-rose-50 border border-rose-200 text-rose-700 p-4 rounded-2xl text-xs font-semibold">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                <span>
+                  {status === 'trial_expired' ? 'Your free trial has ended.' : 'Your subscription is inactive.'}{' '}
+                  {graceDaysLeft !== null && graceDaysLeft > 0
+                    ? `You have ${graceDaysLeft} day${graceDaysLeft === 1 ? '' : 's'} left to resubscribe before your team loses access.`
+                    : 'Access for you and your team has been paused until you resubscribe.'}
+                </span>
+              </div>
+            )}
+            {!isTrial && !isLapsed && (
+              <div className="flex items-center gap-3 bg-amber-50 border border-amber-200 text-amber-700 p-4 rounded-2xl text-xs font-semibold">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                <span>No active subscription. Choose a plan below.</span>
+              </div>
+            )}
 
             {/* Monthly */}
             <div className="border border-zinc-200 rounded-2xl p-6 bg-white space-y-4">
