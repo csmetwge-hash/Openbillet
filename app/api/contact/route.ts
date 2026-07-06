@@ -71,6 +71,7 @@ export async function POST(req: Request) {
     await resend.emails.send({
       from: 'OpenBillet Support <notifications@openbillet.com>',
       to: email,
+      replyTo: recipient,
       subject: 'We received your message — OpenBillet Support',
       html: `
         <div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:32px;background:#09090b;border-radius:16px;border:1px solid #27272a;">
