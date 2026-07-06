@@ -12,6 +12,7 @@ export default function BillingPage() {
   const [trialEndsAt, setTrialEndsAt] = useState<string | null>(null);
   const [statusChangedAt, setStatusChangedAt] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isNonOwner, setIsNonOwner] = useState(false);
   const [checkoutLoading, setCheckoutLoading] = useState<string | null>(null);
   const [portalLoading, setPortalLoading] = useState(false);
   const router = useRouter();
@@ -20,6 +21,16 @@ export default function BillingPage() {
     const fetch = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { router.push('/auth'); return; }
+
+      const accessRes = await window.fetch('/api/check-subscription-block');
+      const access = await accessRes.json();
+
+      if (access.role && access.role !== 'owner') {
+        setIsNonOwner(true);
+        setLoading(false);
+        return;
+      }
+
       const { data } = await supabase
         .from('manager_subscriptions')
         .select('subscription_status, trial_ends_at, status_changed_at')
@@ -38,7 +49,7 @@ export default function BillingPage() {
   const handleSubscribe = async (priceId: string, interval: string) => {
     setCheckoutLoading(interval);
     try {
-      const res = await fetch('/api/create-checkout', {
+      const res = await window.fetch('/api/create-checkout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ priceId }),
@@ -56,7 +67,7 @@ export default function BillingPage() {
   const openBillingPortal = async () => {
     setPortalLoading(true);
     try {
-      const res = await fetch('/api/create-portal-session', { method: 'POST' });
+      const res = await window.fetch('/api/create-portal-session', { method: 'POST' });
       if (!res.ok) throw new Error('Failed to open billing portal');
       const { url } = await res.json();
       if (url) window.location.href = url;
@@ -75,6 +86,24 @@ export default function BillingPage() {
       <div className="h-5 w-5 border-2 border-zinc-300 border-t-zinc-800 rounded-full animate-spin" />
     </div>
   );
+
+  if (isNonOwner) {
+    return (
+      <AppShell>
+        <div className="min-h-screen bg-zinc-50 text-zinc-900 py-12 px-6 flex items-center justify-center">
+          <div className="max-w-md w-full mx-auto text-center space-y-4">
+            <div className="w-12 h-12 bg-amber-50 border border-amber-200 rounded-2xl flex items-center justify-center mx-auto">
+              <AlertCircle className="w-6 h-6 text-amber-600" />
+            </div>
+            <h1 className="text-xl font-black tracking-tight text-zinc-900">Access Paused</h1>
+            <p className="text-sm text-zinc-500">
+              Access to this workspace has been temporarily paused. Please contact your office or account owner for details.
+            </p>
+          </div>
+        </div>
+      </AppShell>
+    );
+  }
 
   const isActive = status === 'active';
   const isTrial = status === 'trial';
