@@ -394,6 +394,26 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
         await notifyClient(hadScheduledAt ? 'schedule_updated' : 'schedule_set', milestoneForm.title);
       }
 
+      if (hadWorker && workerChanged) {
+        const previousWorker = workers.find(w => w.id === hadWorker);
+        if (previousWorker) {
+          try {
+            await fetch('/api/notify-worker', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                workerId: previousWorker.id,
+                jobTitle: milestoneForm.title,
+                scheduledAt: null,
+                clientName: portal?.client_name,
+                projectName: portal?.project_name,
+                type: 'cancellation',
+              }),
+            });
+          } catch (err) { console.error('Worker unassignment notify failed:', err); }
+        }
+      }
+
       if (newWorker && (workerChanged || scheduleChanged)) {
         const assignedWorker = workers.find(w => w.id === newWorker);
         if (assignedWorker) {
