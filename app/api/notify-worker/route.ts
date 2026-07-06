@@ -39,11 +39,12 @@ export async function POST(req: Request) {
     const { workerId, jobTitle, scheduledAt, clientName, projectName, type } = await req.json();
     const isAssignment = type === 'assignment';
     const isCancellation = type === 'cancellation';
+    const isCompletedByAdmin = type === 'completed_by_admin';
 
     if (!workerId || !jobTitle) {
       return NextResponse.json({ error: 'Missing required fields.' }, { status: 400 });
     }
-    if (!isAssignment && !isCancellation && !scheduledAt) {
+    if (!isAssignment && !isCancellation && !isCompletedByAdmin && !scheduledAt) {
       return NextResponse.json({ error: 'Missing scheduledAt for reschedule.' }, { status: 400 });
     }
 
@@ -85,7 +86,7 @@ export async function POST(req: Request) {
       weekday: 'long', month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit',
     }) : null;
 
-    const headingText = isCancellation ? 'Job Canceled' : isAssignment ? 'New Job Assigned' : 'Job Rescheduled';
+    const headingText = isCancellation ? 'Job Canceled' : isAssignment ? 'New Job Assigned' : isCompletedByAdmin ? 'Job Completed' : 'Job Rescheduled';
 
     const emailHtml = `
       <div style="background:#09090b;color:#f4f4f5;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;padding:40px;border-radius:16px;max-width:600px;margin:0 auto;border:1px solid #27272a;">
@@ -97,6 +98,13 @@ export async function POST(req: Request) {
           <p style="font-weight:bold;color:#fff;margin:0 0 4px;">${safeJobTitle}</p>
           ${safeProjectName ? `<p style="color:#a1a1aa;margin:0 0 2px;font-size:13px;">${safeProjectName}${safeClientName ? ` — ${safeClientName}` : ''}</p>` : ''}
           <p style="color:#a1a1aa;font-size:13px;margin:4px 0 0;">No action needed — this job has been removed.</p>
+        </div>
+        ` : isCompletedByAdmin ? `
+        <p style="font-size:14px;color:#d4d4d8;line-height:1.7;margin:0 0 12px;">This job has been marked <strong style="color:#34d399;">complete</strong> by the office:</p>
+        <div style="background:#27272a;padding:16px;border-radius:8px;font-size:14px;margin:0 0 24px;border-left:4px solid #34d399;">
+          <p style="font-weight:bold;color:#fff;margin:0 0 4px;">${safeJobTitle}</p>
+          ${safeProjectName ? `<p style="color:#a1a1aa;margin:0 0 2px;font-size:13px;">${safeProjectName}${safeClientName ? ` — ${safeClientName}` : ''}</p>` : ''}
+          <p style="color:#a1a1aa;font-size:13px;margin:4px 0 0;">No further action is needed from you.</p>
         </div>
         ` : isAssignment ? `
         <p style="font-size:14px;color:#d4d4d8;line-height:1.7;margin:0 0 12px;">A new job has been assigned to you:</p>
@@ -124,7 +132,7 @@ export async function POST(req: Request) {
     await resend.emails.send({
       from: 'OpenBillet Notifications <notifications@openbillet.com>',
       to: workerEmail,
-      subject: isCancellation ? `Job canceled: ${jobTitle}` : isAssignment ? `New job assigned: ${jobTitle}` : `Job rescheduled: ${jobTitle}`,
+      subject: isCancellation ? `Job canceled: ${jobTitle}` : isAssignment ? `New job assigned: ${jobTitle}` : isCompletedByAdmin ? `Job completed: ${jobTitle}` : `Job rescheduled: ${jobTitle}`,
       html: emailHtml,
     });
 
