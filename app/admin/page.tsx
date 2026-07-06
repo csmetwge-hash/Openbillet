@@ -108,6 +108,16 @@ export default function AdminPage() {
 
     if (membership?.role === 'worker') { router.push('/worker'); return; }
 
+    const { data: sub } = await supabase
+      .from('manager_subscriptions')
+      .select('subscription_status, status_changed_at')
+      .eq('user_id', user.id)
+      .maybeSingle();
+    if (sub && (sub.subscription_status === 'trial_expired' || sub.subscription_status === 'inactive') && sub.status_changed_at) {
+      const daysSince = (Date.now() - new Date(sub.status_changed_at).getTime()) / (24 * 60 * 60 * 1000);
+      if (daysSince >= 3) { router.push('/billing'); return; }
+    }
+
     const [portalsRes, workersRes] = await Promise.all([
       supabase.from('client_portals').select('*').eq('user_id', user.id).order('created_at', { ascending: false }),
       supabase.from('team_members').select('id, member_email').eq('owner_user_id', user.id).eq('role', 'worker').eq('status', 'active'),
