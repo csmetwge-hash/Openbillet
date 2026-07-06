@@ -101,17 +101,19 @@ export default function AdminPage() {
 
     const { data: membership } = await supabase
       .from('team_members')
-      .select('role')
+      .select('owner_user_id, role')
       .eq('member_user_id', user.id)
       .eq('status', 'active')
       .maybeSingle();
 
     if (membership?.role === 'worker') { router.push('/worker'); return; }
 
+    const ownerId = membership ? membership.owner_user_id : user.id;
+
     const { data: sub } = await supabase
       .from('manager_subscriptions')
       .select('subscription_status, status_changed_at')
-      .eq('user_id', user.id)
+      .eq('user_id', ownerId)
       .maybeSingle();
     if (sub && (sub.subscription_status === 'trial_expired' || sub.subscription_status === 'inactive') && sub.status_changed_at) {
       const daysSince = (Date.now() - new Date(sub.status_changed_at).getTime()) / (24 * 60 * 60 * 1000);
@@ -119,8 +121,8 @@ export default function AdminPage() {
     }
 
     const [portalsRes, workersRes] = await Promise.all([
-      supabase.from('client_portals').select('*').eq('user_id', user.id).order('created_at', { ascending: false }),
-      supabase.from('team_members').select('id, member_email').eq('owner_user_id', user.id).eq('role', 'worker').eq('status', 'active'),
+      supabase.from('client_portals').select('*').eq('user_id', ownerId).order('created_at', { ascending: false }),
+      supabase.from('team_members').select('id, member_email').eq('owner_user_id', ownerId).eq('role', 'worker').eq('status', 'active'),
     ]);
     setWorkers(workersRes.data || []);
 
