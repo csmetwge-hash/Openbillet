@@ -61,6 +61,7 @@ export async function POST() {
         subscription_status: 'trial',
         trial_started_at: trialStarted.toISOString(),
         trial_ends_at: trialEnds.toISOString(),
+        status_changed_at: trialStarted.toISOString(),
         updated_at: new Date().toISOString(),
       });
 
