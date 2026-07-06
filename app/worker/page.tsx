@@ -92,8 +92,9 @@ export default function WorkerDashboard() {
   }, [jobs, currentUserId, workerId]);
 
   const init = async () => {
-    const { ownerId, currentUserId: uid, role } = await resolveWorkspaceAccess();
+    const { ownerId, currentUserId: uid, role, blocked } = await resolveWorkspaceAccess();
     if (!uid) { router.push('/auth'); return; }
+    if (blocked) { router.push('/billing'); return; }
     setCurrentUserId(uid);
     if (role !== 'worker') { router.push('/dashboard'); return; }
 
