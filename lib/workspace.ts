@@ -1,20 +1,16 @@
 import { supabase } from '@/lib/supabase';
 
-/**
- * Resolves the owner user_id for a given authenticated user.
- * - If the user is an account owner, returns their own user_id.
- * - If the user is a team member, returns the owner's user_id.
- * Also returns the current user's role: 'owner', 'admin', or 'user'.
- */
+const GRACE_PERIOD_DAYS = 3;
+
 export async function resolveWorkspaceAccess(): Promise<{
   ownerId: string | null;
   currentUserId: string | null;
   role: 'owner' | 'admin' | 'user' | 'worker' | null;
+  blocked: boolean;
 }> {
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { ownerId: null, currentUserId: null, role: null };
+  if (!user) return { ownerId: null, currentUserId: null, role: null, blocked: false };
 
-  // Check if this user is a team member of someone else's workspace
   const { data: membership } = await supabase
     .from('team_members')
     .select('owner_user_id, role, status')
@@ -22,18 +18,22 @@ export async function resolveWorkspaceAccess(): Promise<{
     .eq('status', 'active')
     .maybeSingle();
 
-  if (membership) {
-    return {
-      ownerId: membership.owner_user_id,
-      currentUserId: user.id,
-      role: membership.role as 'admin' | 'user' | 'worker',
-    };
+  const ownerId = membership ? membership.owner_user_id : user.id;
+  const role = membership ? (membership.role as 'admin' | 'user' | 'worker') : 'owner';
+
+  const { data: sub } = await supabase
+    .from('manager_subscriptions')
+    .select('subscription_status, status_changed_at')
+    .eq('user_id', ownerId)
+    .maybeSingle();
+
+  let blocked = false;
+  if (sub && (sub.subscription_status === 'trial_expired' || sub.subscription_status === 'inactive')) {
+    if (sub.status_changed_at) {
+      const daysSince = (Date.now() - new Date(sub.status_changed_at).getTime()) / (24 * 60 * 60 * 1000);
+      blocked = daysSince >= GRACE_PERIOD_DAYS;
+    }
   }
 
-  // Otherwise they are the owner
-  return {
-    ownerId: user.id,
-    currentUserId: user.id,
-    role: 'owner',
-  };
+  return { ownerId, currentUserId: user.id, role, blocked };
 }
