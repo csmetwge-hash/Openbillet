@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import AppShell from '@/components/AppShell'
 import {
   ArrowLeft, Upload, Save, UserPlus, Trash2, Mail,
-  CheckCircle2, AlertCircle, Crown, Shield, Eye, Wrench,
+  CheckCircle2, AlertCircle, Crown, Shield, Eye, Wrench, Download,
 } from 'lucide-react';
 import NotificationButton from '@/components/NotificationButton';
 
@@ -346,6 +346,21 @@ export default function SettingsPage() {
               <p className="text-xs text-zinc-400 text-center py-4">No team members yet.</p>
             )}
           </div>
+        </div>
+
+      {/* Data & Privacy */}
+        <div className="bg-white border border-zinc-200 rounded-2xl p-5 space-y-4">
+          <div>
+            <h2 className="text-sm font-black text-zinc-900">Data &amp; Privacy</h2>
+            <p className="text-xs text-zinc-500 mt-0.5">Export or manage your account data.</p>
+          </div>
+          <a href="/api/export-data" download
+            className="w-full flex items-center justify-center gap-2 border border-zinc-200 text-zinc-700 py-3 rounded-xl text-sm font-bold hover:bg-zinc-50 transition cursor-pointer">
+            <Download className="w-4 h-4" /> Export My Data
+          </a>
+          <p className="text-[10px] text-zinc-400 -mt-2">
+            Downloads a copy of your account, portals, milestones, messages, and team data as a JSON file.
+          </p>
         </div>
 
       </div>
