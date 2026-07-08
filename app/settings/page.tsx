@@ -32,6 +32,9 @@ export default function SettingsPage() {
   const [inviteError, setInviteError] = useState('');
 
   const logoInputRef = useRef<HTMLInputElement>(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => { init(); }, []);
 
@@ -118,6 +121,24 @@ export default function SettingsPage() {
     if (!confirm('Remove this team member?')) return;
     await supabase.from('team_members').delete().eq('id', id);
     setTeamMembers(prev => prev.filter(m => m.id !== id));
+  };
+  
+  const handleDeleteAccount = async () => {
+    setDeleting(true);
+    try {
+      const res = await fetch('/api/delete-account', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ confirmText: deleteConfirmText }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      await supabase.auth.signOut();
+      router.push('/');
+    } catch (err: any) {
+      alert('Error deleting account: ' + err.message);
+      setDeleting(false);
+    }
   };
 
   const updateMemberRole = async (id: string, newRole: string) => {
@@ -359,8 +380,44 @@ export default function SettingsPage() {
             <Download className="w-4 h-4" /> Export My Data
           </a>
           <p className="text-[10px] text-zinc-400 -mt-2">
-            Downloads a copy of your account, portals, milestones, messages, and team data as a JSON file.
+            Downloads a readable copy of your account, portals, milestones, messages, and team data.
           </p>
+        </div>
+
+        {/* Danger Zone */}
+        <div className="bg-white border border-red-200 rounded-2xl p-5 space-y-4">
+          <div>
+            <h2 className="text-sm font-black text-red-600">Danger Zone</h2>
+            <p className="text-xs text-zinc-500 mt-0.5">Permanently delete your account and all associated data.</p>
+          </div>
+          {!showDeleteConfirm ? (
+            <button onClick={() => setShowDeleteConfirm(true)}
+              className="w-full flex items-center justify-center gap-2 border border-red-200 text-red-600 py-3 rounded-xl text-sm font-bold hover:bg-red-50 transition cursor-pointer">
+              <Trash2 className="w-4 h-4" /> Delete My Account
+            </button>
+          ) : (
+            <div className="space-y-3 bg-red-50 border border-red-200 rounded-xl p-4">
+              <p className="text-xs text-red-700 font-semibold leading-relaxed">
+                This cannot be undone. All your client portals, milestones, messages, files, team members, and billing will be permanently deleted. Your data will no longer be recoverable once you confirm.
+              </p>
+              <p className="text-xs text-zinc-600">
+                Type <span className="font-bold">DELETE</span> below to confirm.
+              </p>
+              <input type="text" value={deleteConfirmText} onChange={e => setDeleteConfirmText(e.target.value)}
+                placeholder="DELETE"
+                className="w-full border border-red-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-red-500 transition" />
+              <div className="flex gap-2">
+                <button onClick={handleDeleteAccount} disabled={deleteConfirmText !== 'DELETE' || deleting}
+                  className="flex-1 bg-red-600 text-white py-2.5 rounded-xl text-sm font-bold hover:bg-red-700 transition cursor-pointer disabled:opacity-40">
+                  {deleting ? 'Deleting...' : 'Permanently Delete'}
+                </button>
+                <button onClick={() => { setShowDeleteConfirm(false); setDeleteConfirmText(''); }}
+                  className="px-4 py-2.5 border border-zinc-200 rounded-xl text-sm font-semibold text-zinc-600 hover:bg-zinc-50 transition cursor-pointer">
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
       </div>
