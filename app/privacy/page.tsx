@@ -7,7 +7,7 @@ export const metadata: Metadata = {
   description: 'How OpenBillet collects, uses, and protects your data.',
 };
 
-const LAST_UPDATED = 'June 24, 2026';
+const LAST_UPDATED = 'July 8, 2026';
 const CONTACT_EMAIL = 'support@openbillet.com';
 
 export default function PrivacyPage() {
@@ -31,7 +31,9 @@ export default function PrivacyPage() {
           <section>
             <h2 className="text-base font-black text-zinc-900 mb-3">2. Information We Collect</h2>
             <p className="mb-2"><strong>Account information:</strong> When you register, we collect your email address and password (stored as a secure hash). If you subscribe to a paid plan, Stripe collects your payment details — we never store credit card numbers.</p>
-            <p className="mb-2"><strong>Business data you create:</strong> Client names, email addresses, phone numbers, addresses, project details, milestone content, uploaded files, messages, and proposals you create within the platform.</p>
+            <p className="mb-2"><strong>Business data you create:</strong> Client names, email addresses, phone numbers, addresses, project details, milestone content, uploaded files and photos, messages, and proposals you create within the platform.</p>
+            <p className="mb-2"><strong>Team member information:</strong> If you invite team members or field workers, we collect their email address and, if provided, phone number.</p>
+            <p className="mb-2"><strong>Push notifications:</strong> If you or your team enable push notifications, we store a browser-issued subscription identifier (not linked to your identity beyond your account) in order to deliver those notifications.</p>
             <p className="mb-2"><strong>Usage data:</strong> Pages visited, features used, timestamps, and browser/device information collected automatically via server logs.</p>
             <p><strong>Communications:</strong> If you contact us for support, we retain those communications.</p>
           </section>
@@ -41,7 +43,7 @@ export default function PrivacyPage() {
             <ul className="list-disc list-inside space-y-1.5 text-zinc-600">
               <li>To provide, maintain, and improve the OpenBillet platform</li>
               <li>To process payments and manage your subscription</li>
-              <li>To send transactional emails (portal notifications, billing receipts)</li>
+              <li>To send transactional emails and push notifications (portal updates, job reminders, billing receipts)</li>
               <li>To respond to support requests</li>
               <li>To detect and prevent fraud or abuse</li>
               <li>To comply with legal obligations</li>
@@ -57,13 +59,15 @@ export default function PrivacyPage() {
               <li><strong>Stripe</strong> — payment processing</li>
               <li><strong>Resend</strong> — transactional email delivery</li>
               <li><strong>Vercel</strong> — application hosting</li>
+              <li><strong>Sentry</strong> — error monitoring, to help us identify and fix technical issues</li>
+              <li><strong>Apple, Google, and Mozilla push services</strong> — used solely to deliver push notifications to devices that have opted in; no personal data beyond the notification content is shared with them</li>
             </ul>
             <p className="mt-3">Each provider is bound by their own privacy policy and data processing agreements. We do not share your data with anyone else unless required by law.</p>
           </section>
 
           <section>
-            <h2 className="text-base font-black text-zinc-900 mb-3">5. Data Retention</h2>
-            <p>We retain your data for as long as your account is active. If you cancel your account, we will delete your data within 90 days, except where we are required to retain it for legal or financial compliance purposes (e.g., billing records).</p>
+            <h2 className="text-base font-black text-zinc-900 mb-3">5. Data Retention &amp; Deletion</h2>
+            <p className="mb-2">We retain your data for as long as your account is active. You can permanently delete your account and all associated data at any time from Settings — this deletion is immediate and irreversible, except where we are required to retain limited records for legal or financial compliance purposes (e.g., billing records required by tax law).</p>
           </section>
 
           <section>
@@ -80,7 +84,7 @@ export default function PrivacyPage() {
               <li><strong>Right to opt out</strong> — we do not sell personal information, so no opt-out is needed</li>
               <li><strong>Right to non-discrimination</strong> — we will not discriminate against you for exercising your rights</li>
             </ul>
-            <p className="mt-3">To exercise these rights, contact us at <a href={`mailto:${CONTACT_EMAIL}`} className="text-zinc-900 underline">{CONTACT_EMAIL}</a>.</p>
+            <p className="mt-3">You can exercise your right to export or delete your data at any time using the &ldquo;Export My Data&rdquo; and &ldquo;Delete My Account&rdquo; options in Settings. For any other request, contact us at <a href={`mailto:${CONTACT_EMAIL}`} className="text-zinc-900 underline">{CONTACT_EMAIL}</a>.</p>
           </section>
 
           <section>
@@ -94,7 +98,7 @@ export default function PrivacyPage() {
               <li><strong>Right to data portability</strong> — receive your data in a portable format</li>
               <li><strong>Right to object</strong> — object to certain types of processing</li>
             </ul>
-            <p className="mt-3">Our legal basis for processing is contract performance (to provide the service you signed up for) and legitimate interests. To exercise any right, contact us at <a href={`mailto:${CONTACT_EMAIL}`} className="text-zinc-900 underline">{CONTACT_EMAIL}</a>. We will respond within 30 days.</p>
+            <p className="mt-3">Our legal basis for processing is contract performance (to provide the service you signed up for) and legitimate interests. You can exercise your right to access, port, or erase your data at any time using the &ldquo;Export My Data&rdquo; and &ldquo;Delete My Account&rdquo; options in Settings. For any other request, contact us at <a href={`mailto:${CONTACT_EMAIL}`} className="text-zinc-900 underline">{CONTACT_EMAIL}</a>. We will respond within 30 days.</p>
           </section>
 
           <section>

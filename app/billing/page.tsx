@@ -11,6 +11,7 @@ export default function BillingPage() {
   const [status, setStatus] = useState<string>('inactive');
   const [trialEndsAt, setTrialEndsAt] = useState<string | null>(null);
   const [statusChangedAt, setStatusChangedAt] = useState<string | null>(null);
+  const [planDetails, setPlanDetails] = useState<{ interval: string; amount: number; currentPeriodEnd: string | null; cancelAtPeriodEnd: boolean } | null>(null);
   const [loading, setLoading] = useState(true);
   const [isNonOwner, setIsNonOwner] = useState(false);
   const [checkoutLoading, setCheckoutLoading] = useState<string | null>(null);
@@ -40,6 +41,13 @@ export default function BillingPage() {
         setStatus(data.subscription_status);
         setTrialEndsAt(data.trial_ends_at);
         setStatusChangedAt(data.status_changed_at);
+
+        if (data.subscription_status === 'active') {
+          try {
+            const detailsRes = await window.fetch('/api/subscription-details');
+            if (detailsRes.ok) setPlanDetails(await detailsRes.json());
+          } catch {}
+        }
       }
       setLoading(false);
     };
@@ -136,15 +144,37 @@ export default function BillingPage() {
         </div>
 
         {isActive ? (
-          <div className="flex items-center gap-3 bg-emerald-50 border border-emerald-200 text-emerald-700 p-4 rounded-2xl text-xs font-semibold">
-            <CheckCircle2 className="w-4 h-4 shrink-0" />
-            <span>
-              Active — Unlimited everything.{' '}
-              <button onClick={openBillingPortal} className="underline cursor-pointer hover:text-emerald-800">
-                Manage billing
-              </button>{' '}
-              to update payment, switch billing period, or cancel.
-            </span>
+          <div className="space-y-3">
+            <div className={`flex items-center gap-3 border p-4 rounded-2xl text-xs font-semibold ${
+              planDetails?.cancelAtPeriodEnd ? 'bg-amber-50 border-amber-200 text-amber-700' : 'bg-emerald-50 border-emerald-200 text-emerald-700'
+            }`}>
+              <CheckCircle2 className="w-4 h-4 shrink-0" />
+              <span>
+                {planDetails?.cancelAtPeriodEnd
+                  ? `Your subscription is set to cancel${planDetails.currentPeriodEnd ? ` on ${new Date(planDetails.currentPeriodEnd).toLocaleDateString()}` : ''}.`
+                  : 'Active — Unlimited everything.'}
+                {' '}
+                <button onClick={openBillingPortal} className="underline cursor-pointer">
+                  Manage billing
+                </button>{' '}
+                to update payment, switch billing period, or cancel.
+              </span>
+            </div>
+            {planDetails?.amount && (
+              <div className="border border-zinc-200 rounded-2xl p-4 bg-white flex items-center justify-between">
+                <div>
+                  <p className="text-lg font-black text-zinc-900">
+                    ${planDetails.amount.toFixed(2)}
+                    <span className="text-xs font-normal text-zinc-400">/{planDetails.interval}</span>
+                  </p>
+                  {planDetails.currentPeriodEnd && !planDetails.cancelAtPeriodEnd && (
+                    <p className="text-xs text-zinc-400 mt-0.5">
+                      Renews {new Date(planDetails.currentPeriodEnd).toLocaleDateString()}
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         ) : (
           <div className="space-y-4">
