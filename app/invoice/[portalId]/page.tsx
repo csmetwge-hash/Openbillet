@@ -3,7 +3,7 @@
 import { useEffect, useState, use, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
-import { Printer, ArrowLeft, CheckCircle2 } from 'lucide-react';
+import { Printer, ArrowLeft, CheckCircle2, Mail } from 'lucide-react';
 import Link from 'next/link';
 
 interface Portal {
@@ -27,6 +27,8 @@ interface Milestone {
 }
 
 function InvoiceContent({ portalId }: { portalId: string }) {
+  const [emailSending, setEmailSending] = useState(false);
+  const [emailSent, setEmailSent] = useState(false);
   const searchParams = useSearchParams();
   const selectedIds = searchParams?.get('milestones')?.split(',') || [];
 
@@ -105,6 +107,30 @@ function InvoiceContent({ portalId }: { portalId: string }) {
   const grandTotal = milestones.reduce((sum, m) => sum + parseAmount(m.amount), 0);
   const hasAnyAmount = milestones.some(m => m.amount);
 
+  const handleEmailInvoice = async () => {
+    setEmailSending(true);
+    try {
+      const res = await fetch('/api/send-invoice', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          portalId,
+          milestoneIds: selectedIds.join(','),
+          invoiceNumber,
+          total: grandTotal > 0 ? `$${grandTotal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : null,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      setEmailSent(true);
+      setTimeout(() => setEmailSent(false), 3000);
+    } catch (err: any) {
+      alert('Error sending invoice: ' + err.message);
+    } finally {
+      setEmailSending(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-zinc-50 font-sans antialiased">
 
@@ -115,11 +141,19 @@ function InvoiceContent({ portalId }: { portalId: string }) {
             className="flex items-center gap-1.5 text-sm font-bold text-zinc-500 hover:text-zinc-900 transition">
             <ArrowLeft className="w-4 h-4" /> Back to Portal
           </Link>
-          <button onClick={() => window.print()}
-            className="flex items-center gap-2 bg-zinc-900 text-white text-xs font-bold px-4 py-2.5 rounded-xl hover:bg-zinc-700 transition cursor-pointer">
-            <Printer className="w-3.5 h-3.5" />
-            Save / Print PDF
-          </button>
+          <div className="flex items-center gap-2">
+            <button onClick={handleEmailInvoice} disabled={emailSending || !portal.client_email}
+              title={!portal.client_email ? 'No client email on file' : undefined}
+              className="flex items-center gap-2 border border-zinc-200 text-zinc-700 text-xs font-bold px-4 py-2.5 rounded-xl hover:bg-zinc-50 transition cursor-pointer disabled:opacity-40">
+              <Mail className="w-3.5 h-3.5" />
+              {emailSending ? 'Sending...' : emailSent ? 'Sent!' : 'Email to Client'}
+            </button>
+            <button onClick={() => window.print()}
+              className="flex items-center gap-2 bg-zinc-900 text-white text-xs font-bold px-4 py-2.5 rounded-xl hover:bg-zinc-700 transition cursor-pointer">
+              <Printer className="w-3.5 h-3.5" />
+              Save / Print PDF
+            </button>
+          </div>
         </div>
       </div>
 
