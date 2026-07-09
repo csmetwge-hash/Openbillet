@@ -997,11 +997,11 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-semibold text-zinc-900 truncate">{m.title}</p>
                     <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                      <span className={`text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded-full ${
-                        m.status === 'completed' ? 'bg-emerald-50 text-emerald-600'
-                        : m.status === 'in_progress' ? 'bg-amber-50 text-amber-600'
-                        : 'bg-zinc-100 text-zinc-500'
-                      }`}>{m.status.replace('_', ' ')}</span>
+                      {m.amount && (
+                        <span className={`text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded-full ${
+                          m.status === 'completed' ? 'bg-emerald-50 text-emerald-600' : 'bg-amber-50 text-amber-600'
+                        }`}>{m.status === 'completed' ? 'Paid' : 'Due'}</span>
+                      )}
                       {m.amount && <span className="text-[10px] font-bold text-zinc-600">{m.amount}</span>}
                     </div>
                   </div>
