@@ -107,6 +107,8 @@ function InvoiceContent({ portalId }: { portalId: string }) {
   };
 
   const grandTotal = milestones.reduce((sum, m) => sum + parseAmount(m.amount), 0);
+  const paidTotal = milestones.filter(m => m.status === 'completed').reduce((sum, m) => sum + parseAmount(m.amount), 0);
+  const dueTotal = milestones.filter(m => m.status !== 'completed').reduce((sum, m) => sum + parseAmount(m.amount), 0);
   const hasAnyAmount = milestones.some(m => m.amount);
 
   const handleEmailInvoice = async () => {
@@ -120,7 +122,8 @@ function InvoiceContent({ portalId }: { portalId: string }) {
           milestoneIds: selectedIds.join(','),
           invoiceNumber,
           docType,
-          total: grandTotal > 0 ? `$${grandTotal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : null,
+          totalPaid: paidTotal > 0 ? `$${paidTotal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : null,
+          totalDue: dueTotal > 0 ? `$${dueTotal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : null,
         }),
       });
       const data = await res.json();
@@ -208,53 +211,65 @@ function InvoiceContent({ portalId }: { portalId: string }) {
               <thead>
                 <tr className="border-b-2 border-zinc-200">
                   <th className="text-left text-[10px] font-bold uppercase tracking-wider text-zinc-400 pb-3 pr-4">Description</th>
-                  <th className="text-left text-[10px] font-bold uppercase tracking-wider text-zinc-400 pb-3 pr-4 w-24">Status</th>
+                  <th className="text-left text-[10px] font-bold uppercase tracking-wider text-zinc-400 pb-3 pr-4 w-24">Payment</th>
                   {hasAnyAmount && (
                     <th className="text-right text-[10px] font-bold uppercase tracking-wider text-zinc-400 pb-3 w-32">Amount</th>
                   )}
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-100">
-                {milestones.map(m => (
-                  <tr key={m.id}>
-                    <td className="py-4 pr-4">
-                      <p className="font-semibold text-zinc-900">{m.title}</p>
-                      {m.description && (
-                        <p className="text-xs text-zinc-400 mt-0.5 leading-relaxed">{m.description}</p>
-                      )}
-                    </td>
-                    <td className="py-4 pr-4">
-                      <span className={`text-[9px] font-black uppercase tracking-wider px-2 py-1 rounded-full ${
-                        m.status === 'completed' ? 'bg-emerald-50 text-emerald-600'
-                        : m.status === 'in_progress' ? 'bg-amber-50 text-amber-600'
-                        : 'bg-zinc-100 text-zinc-500'
-                      }`}>{m.status.replace('_', ' ')}</span>
-                    </td>
-                    {hasAnyAmount && (
-                      <td className="py-4 text-right font-semibold text-zinc-900">
-                        {m.amount || <span className="text-zinc-300">—</span>}
+                {milestones.map(m => {
+                  const hasCost = !!m.amount;
+                  const isPaid = hasCost && m.status === 'completed';
+                  const isDue = hasCost && m.status !== 'completed';
+                  return (
+                    <tr key={m.id}>
+                      <td className="py-4 pr-4">
+                        <p className="font-semibold text-zinc-900">{m.title}</p>
+                        {m.description && (
+                          <p className="text-xs text-zinc-400 mt-0.5 leading-relaxed">{m.description}</p>
+                        )}
                       </td>
-                    )}
-                  </tr>
-                ))}
+                      <td className="py-4 pr-4">
+                        {hasCost ? (
+                          <span className={`text-[9px] font-black uppercase tracking-wider px-2 py-1 rounded-full ${
+                            isPaid ? 'bg-emerald-50 text-emerald-600' : 'bg-amber-50 text-amber-600'
+                          }`}>{isPaid ? 'Paid' : 'Due'}</span>
+                        ) : (
+                          <span className="text-[9px] font-black uppercase tracking-wider px-2 py-1 rounded-full bg-zinc-100 text-zinc-400">N/A</span>
+                        )}
+                      </td>
+                      {hasAnyAmount && (
+                        <td className="py-4 text-right font-semibold text-zinc-900">
+                          {m.amount || <span className="text-zinc-300">—</span>}
+                        </td>
+                      )}
+                    </tr>
+                  );
+                })}
               </tbody>
               {hasAnyAmount && (
                 <tfoot>
-                  <tr className="border-t-2 border-zinc-200">
-                    <td colSpan={2} className="pt-5 text-right pr-4">
-                      <span className="text-xs font-bold text-zinc-500 uppercase tracking-wider">
-                        {isReceipt ? 'Total Paid' : 'Amount Due'}
-                      </span>
-                      {isReceipt && (
-                        <span className="ml-2 text-[9px] font-black uppercase tracking-wider bg-emerald-50 text-emerald-600 px-2 py-0.5 rounded-full">
-                          Paid in Full
-                        </span>
-                      )}
-                    </td>
-                    <td className="pt-5 text-right text-xl font-black text-zinc-900">
-                      {grandTotal > 0 ? `$${grandTotal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—'}
-                    </td>
-                  </tr>
+                  {paidTotal > 0 && (
+                    <tr className="border-t-2 border-zinc-200">
+                      <td colSpan={2} className="pt-5 text-right pr-4">
+                        <span className="text-xs font-bold text-emerald-600 uppercase tracking-wider">Total Paid</span>
+                      </td>
+                      <td className="pt-5 text-right text-lg font-black text-zinc-900">
+                        ${paidTotal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </td>
+                    </tr>
+                  )}
+                  {dueTotal > 0 && (
+                    <tr className={paidTotal > 0 ? '' : 'border-t-2 border-zinc-200'}>
+                      <td colSpan={2} className="pt-3 text-right pr-4">
+                        <span className="text-xs font-bold text-amber-600 uppercase tracking-wider">Amount Due</span>
+                      </td>
+                      <td className="pt-3 text-right text-xl font-black text-zinc-900">
+                        ${dueTotal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </td>
+                    </tr>
+                  )}
                 </tfoot>
               )}
             </table>
