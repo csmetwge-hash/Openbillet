@@ -108,6 +108,7 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
   // Invoice
   const [showInvoiceModal, setShowInvoiceModal] = useState(false);
   const [invoiceSelected, setInvoiceSelected] = useState<Record<string, boolean>>({});
+  const [invoiceDocType, setInvoiceDocType] = useState<'invoice' | 'receipt'>('invoice');
 
   // CRM
   const [editingCrm, setEditingCrm] = useState(false);
@@ -818,7 +819,7 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
       .map(([id]) => id)
       .join(',');
     if (!selectedIds) return;
-    window.open(`/invoice/${portalId}?milestones=${selectedIds}`, '_blank');
+    window.open(`/invoice/${portalId}?milestones=${selectedIds}&type=${invoiceDocType}`, '_blank');
     setShowInvoiceModal(false);
   };
 
@@ -954,7 +955,21 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
                 <X className="w-4 h-4" />
               </button>
             </div>
-            <p className="text-xs text-zinc-500">Select milestones to include in the invoice.</p>
+            <p className="text-xs text-zinc-500">Select milestones to include, then choose a document type.</p>
+            <div className="flex gap-2">
+              <button onClick={() => setInvoiceDocType('invoice')}
+                className={`flex-1 py-2 rounded-xl text-xs font-bold transition cursor-pointer ${
+                  invoiceDocType === 'invoice' ? 'bg-zinc-900 text-white' : 'bg-zinc-100 text-zinc-500 hover:bg-zinc-200'
+                }`}>
+                Invoice — Amount Due
+              </button>
+              <button onClick={() => setInvoiceDocType('receipt')}
+                className={`flex-1 py-2 rounded-xl text-xs font-bold transition cursor-pointer ${
+                  invoiceDocType === 'receipt' ? 'bg-emerald-600 text-white' : 'bg-zinc-100 text-zinc-500 hover:bg-zinc-200'
+                }`}>
+                Receipt — Paid
+              </button>
+            </div>
             <div className="flex gap-3 text-xs font-bold">
               <button onClick={() => {
                 const all: Record<string, boolean> = {};
