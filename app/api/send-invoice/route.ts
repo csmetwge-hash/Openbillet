@@ -18,7 +18,7 @@ export async function POST(req: Request) {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 });
 
-    const { portalId, milestoneIds, invoiceNumber, total, docType } = await req.json();
+    const { portalId, milestoneIds, invoiceNumber, totalPaid, totalDue, docType } = await req.json();
     const isReceipt = docType === 'receipt';
     if (!portalId || !milestoneIds) {
       return NextResponse.json({ error: 'Missing required fields.' }, { status: 400 });
@@ -70,9 +70,9 @@ export async function POST(req: Request) {
           <p style="font-size:12px;color:#71717a;margin:0 0 20px;">${docLabel} ${invoiceNumber}</p>
           <p style="font-size:14px;color:#d4d4d8;line-height:1.7;margin:0 0 8px;">Hi ${portal.client_name},</p>
           <p style="font-size:14px;color:#d4d4d8;line-height:1.7;margin:0 0 24px;">
-            ${isReceipt
-              ? `Your receipt is ready to view.${total ? ` Total paid: <strong>${total}</strong>.` : ''}`
-              : `Your invoice is ready to view.${total ? ` Amount due: <strong>${total}</strong>.` : ''}`}
+            ${isReceipt ? 'Your receipt is ready to view.' : 'Your invoice is ready to view.'}
+            ${totalPaid ? ` Amount paid: <strong>${totalPaid}</strong>.` : ''}
+            ${totalDue ? ` Amount due: <strong>${totalDue}</strong>.` : ''}
           </p>
           <a href="${invoiceUrl}" style="display:inline-block;background:#ffffff;color:#09090b;padding:14px 28px;border-radius:10px;font-weight:700;text-decoration:none;font-size:13px;">
             View ${docLabel} →
