@@ -92,8 +92,10 @@ function InvoiceContent({ portalId }: { portalId: string }) {
     </div>
   );
 
+  const docType = searchParams?.get('type') === 'receipt' ? 'receipt' : 'invoice';
+  const isReceipt = docType === 'receipt';
   const brandName = portal.brand_name || 'Operations Hub';
-  const invoiceNumber = `INV-${portalId.substring(0, 6).toUpperCase()}`;
+  const invoiceNumber = `${isReceipt ? 'RCT' : 'INV'}-${portalId.substring(0, 6).toUpperCase()}`;
   const today = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
 
   // Parse amounts and compute total
@@ -117,6 +119,7 @@ function InvoiceContent({ portalId }: { portalId: string }) {
           portalId,
           milestoneIds: selectedIds.join(','),
           invoiceNumber,
+          docType,
           total: grandTotal > 0 ? `$${grandTotal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : null,
         }),
       });
@@ -146,7 +149,7 @@ function InvoiceContent({ portalId }: { portalId: string }) {
               title={!portal.client_email ? 'No client email on file' : undefined}
               className="flex items-center gap-2 border border-zinc-200 text-zinc-700 text-xs font-bold px-4 py-2.5 rounded-xl hover:bg-zinc-50 transition cursor-pointer disabled:opacity-40">
               <Mail className="w-3.5 h-3.5" />
-              {emailSending ? 'Sending...' : emailSent ? 'Sent!' : 'Email to Client'}
+              {emailSending ? 'Sending...' : emailSent ? 'Sent!' : `Email ${isReceipt ? 'Receipt' : 'Invoice'} to Client`}
             </button>
             <button onClick={() => window.print()}
               className="flex items-center gap-2 bg-zinc-900 text-white text-xs font-bold px-4 py-2.5 rounded-xl hover:bg-zinc-700 transition cursor-pointer">
@@ -174,7 +177,7 @@ function InvoiceContent({ portalId }: { portalId: string }) {
                   <span className="text-base font-black text-zinc-900">{brandName}</span>
                 </div>
               )}
-              <h1 className="text-2xl font-black text-zinc-900 tracking-tight">Invoice</h1>
+              <h1 className="text-2xl font-black text-zinc-900 tracking-tight">{isReceipt ? 'Receipt' : 'Invoice'}</h1>
               <p className="text-xs text-zinc-400 font-mono mt-1">{invoiceNumber}</p>
             </div>
             <div className="sm:text-right space-y-1">
@@ -238,8 +241,15 @@ function InvoiceContent({ portalId }: { portalId: string }) {
               {hasAnyAmount && (
                 <tfoot>
                   <tr className="border-t-2 border-zinc-200">
-                    <td colSpan={2} className="pt-5 text-right text-xs font-bold text-zinc-500 uppercase tracking-wider pr-4">
-                      Total
+                    <td colSpan={2} className="pt-5 text-right pr-4">
+                      <span className="text-xs font-bold text-zinc-500 uppercase tracking-wider">
+                        {isReceipt ? 'Total Paid' : 'Amount Due'}
+                      </span>
+                      {isReceipt && (
+                        <span className="ml-2 text-[9px] font-black uppercase tracking-wider bg-emerald-50 text-emerald-600 px-2 py-0.5 rounded-full">
+                          Paid in Full
+                        </span>
+                      )}
                     </td>
                     <td className="pt-5 text-right text-xl font-black text-zinc-900">
                       {grandTotal > 0 ? `$${grandTotal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—'}
