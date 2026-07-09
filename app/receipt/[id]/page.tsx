@@ -195,7 +195,12 @@ export default function ReceiptPage({ params }: { params: Promise<{ id: string }
               </tbody>
               <tfoot>
                 <tr className="border-t border-zinc-200">
-                  <td className="pt-4 text-xs font-bold text-zinc-500 uppercase tracking-wider text-right pr-4">Total</td>
+                  <td className="pt-4 text-right pr-4">
+                    <span className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Total Paid</span>
+                    <span className="ml-2 text-[9px] font-black uppercase tracking-wider bg-emerald-50 text-emerald-600 px-2 py-0.5 rounded-full">
+                      Paid in Full
+                    </span>
+                  </td>
                   <td className="pt-4 text-right text-lg font-black text-zinc-900">
                     {milestone.amount || '—'}
                   </td>
