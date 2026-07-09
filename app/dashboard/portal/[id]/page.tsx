@@ -103,6 +103,7 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
   const [proposalBody, setProposalBody] = useState('');
   const [lineItems, setLineItems] = useState([{ description: '', quantity: 1, unit_price: 0 }]);
   const [savingProposal, setSavingProposal] = useState(false);
+  const [editingProposalId, setEditingProposalId] = useState<string | null>(null);
 
   // Invoice
   const [showInvoiceModal, setShowInvoiceModal] = useState(false);
@@ -737,23 +738,47 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
   const saveProposal = async (asDraft: boolean) => {
     if (!proposalTitle.trim() || isReadOnly) return;
     setSavingProposal(true);
-    const { data: prop } = await supabase.from('portal_proposals').insert({
-      portal_id: portalId, title: proposalTitle, body: proposalBody,
-      status: asDraft ? 'draft' : 'sent',
-      total_amount: totalAmount > 0 ? `$${totalAmount.toLocaleString()}` : null,
-    }).select().single();
-    if (prop && lineItems.some(i => i.description)) {
-      await supabase.from('proposal_line_items').insert(
-        lineItems.filter(i => i.description).map(i => ({ proposal_id: prop.id, ...i }))
-      );
+
+    if (editingProposalId) {
+      const original = proposals.find(p => p.id === editingProposalId);
+      const wasSent = original && original.status !== 'draft';
+
+      await supabase.from('portal_proposals').update({
+        title: proposalTitle, body: proposalBody,
+        total_amount: totalAmount > 0 ? `$${totalAmount.toLocaleString()}` : null,
+      }).eq('id', editingProposalId);
+
+      await supabase.from('proposal_line_items').delete().eq('proposal_id', editingProposalId);
+      if (lineItems.some(i => i.description)) {
+        await supabase.from('proposal_line_items').insert(
+          lineItems.filter(i => i.description).map(i => ({ proposal_id: editingProposalId, ...i }))
+        );
+      }
+
+      await logActivity('proposal_updated', `Proposal updated: ${proposalTitle}`);
+      if (wasSent) {
+        await notifyClient('proposal_updated', proposalTitle);
+      }
+    } else {
+      const { data: prop } = await supabase.from('portal_proposals').insert({
+        portal_id: portalId, title: proposalTitle, body: proposalBody,
+        status: asDraft ? 'draft' : 'sent',
+        total_amount: totalAmount > 0 ? `$${totalAmount.toLocaleString()}` : null,
+      }).select().single();
+      if (prop && lineItems.some(i => i.description)) {
+        await supabase.from('proposal_line_items').insert(
+          lineItems.filter(i => i.description).map(i => ({ proposal_id: prop.id, ...i }))
+        );
+      }
+      if (!asDraft) {
+        await logActivity('proposal_sent', `Proposal sent: ${proposalTitle}`);
+        await notifyClient('proposal_sent', proposalTitle);
+      }
     }
-    if (!asDraft) {
-      await logActivity('proposal_sent', `Proposal sent: ${proposalTitle}`);
-      await notifyClient('proposal_sent', proposalTitle);
-    }
+
     setProposalTitle(''); setProposalBody('');
     setLineItems([{ description: '', quantity: 1, unit_price: 0 }]);
-    setShowProposalForm(false); setSavingProposal(false);
+    setShowProposalForm(false); setSavingProposal(false); setEditingProposalId(null);
     const { data } = await supabase.from('portal_proposals').select('*, proposal_line_items(*)').eq('portal_id', portalId).order('created_at', { ascending: false });
     setProposals((data || []).map((p: any) => ({ ...p, line_items: p.proposal_line_items || [] })));
   };
@@ -764,6 +789,19 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
     setProposals(prev => prev.map(p => p.id === id ? { ...p, status: 'sent' } : p));
     await logActivity('proposal_sent', `Proposal sent: ${title}`);
     await notifyClient('proposal_sent', title);
+  };
+
+  const openEditProposal = (p: any) => {
+    if (isReadOnly) return;
+    setEditingProposalId(p.id);
+    setProposalTitle(p.title);
+    setProposalBody(p.body || '');
+    setLineItems(
+      p.line_items && p.line_items.length > 0
+        ? p.line_items.map((li: any) => ({ description: li.description, quantity: li.quantity, unit_price: li.unit_price }))
+        : [{ description: '', quantity: 1, unit_price: 0 }]
+    );
+    setShowProposalForm(true);
   };
 
   // ── Invoice ──────────────────────────────────────────────
@@ -1614,7 +1652,7 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
 
             {showProposalForm && !isReadOnly && (
               <div className="bg-white border border-zinc-200 rounded-2xl p-4 space-y-4">
-                <h3 className="text-sm font-black text-zinc-900">New Proposal</h3>
+                <h3 className="text-sm font-black text-zinc-900">{editingProposalId ? 'Edit Proposal' : 'New Proposal'}</h3>
                 <input type="text" placeholder="Proposal title"
                   value={proposalTitle} onChange={e => setProposalTitle(e.target.value)}
                   className="w-full border border-zinc-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-zinc-900 transition" />
@@ -1666,15 +1704,24 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
                   )}
                 </div>
                 <div className="flex gap-2 pt-2">
-                  <button onClick={() => saveProposal(false)} disabled={!proposalTitle.trim() || savingProposal}
-                    className="flex-1 bg-zinc-900 text-white py-3 rounded-xl text-sm font-bold disabled:opacity-40 hover:bg-zinc-700 transition cursor-pointer">
-                    {savingProposal ? 'Saving...' : 'Send to Customer'}
-                  </button>
-                  <button onClick={() => saveProposal(true)} disabled={!proposalTitle.trim() || savingProposal}
-                    className="px-4 py-3 border border-zinc-200 rounded-xl text-sm font-semibold text-zinc-600 hover:bg-zinc-50 transition cursor-pointer">
-                    Draft
-                  </button>
-                  <button onClick={() => setShowProposalForm(false)}
+                  {editingProposalId ? (
+                    <button onClick={() => saveProposal(false)} disabled={!proposalTitle.trim() || savingProposal}
+                      className="flex-1 bg-zinc-900 text-white py-3 rounded-xl text-sm font-bold disabled:opacity-40 hover:bg-zinc-700 transition cursor-pointer">
+                      {savingProposal ? 'Saving...' : 'Save Changes'}
+                    </button>
+                  ) : (
+                    <>
+                      <button onClick={() => saveProposal(false)} disabled={!proposalTitle.trim() || savingProposal}
+                        className="flex-1 bg-zinc-900 text-white py-3 rounded-xl text-sm font-bold disabled:opacity-40 hover:bg-zinc-700 transition cursor-pointer">
+                        {savingProposal ? 'Saving...' : 'Send to Customer'}
+                      </button>
+                      <button onClick={() => saveProposal(true)} disabled={!proposalTitle.trim() || savingProposal}
+                        className="px-4 py-3 border border-zinc-200 rounded-xl text-sm font-semibold text-zinc-600 hover:bg-zinc-50 transition cursor-pointer">
+                        Draft
+                      </button>
+                    </>
+                  )}
+                  <button onClick={() => { setShowProposalForm(false); setEditingProposalId(null); setProposalTitle(''); setProposalBody(''); setLineItems([{ description: '', quantity: 1, unit_price: 0 }]); }}
                     className="px-4 py-3 border border-zinc-200 rounded-xl text-sm font-semibold text-zinc-600 hover:bg-zinc-50 transition cursor-pointer">
                     Cancel
                   </button>
@@ -1714,10 +1761,22 @@ export default function AdminPortalWorkspace({ params }: { params: Promise<{ id:
                   </div>
                 )}
                 {p.status === 'draft' && !isReadOnly && (
-                  <div className="px-4 pb-4">
+                  <div className="px-4 pb-4 flex items-center gap-3">
                     <button onClick={() => sendProposal(p.id, p.title)}
                       className="text-xs font-bold text-zinc-900 underline cursor-pointer hover:text-zinc-600 transition">
                       Send to customer →
+                    </button>
+                    <button onClick={() => openEditProposal(p)}
+                      className="text-xs font-bold text-zinc-500 underline cursor-pointer hover:text-zinc-700 transition">
+                      Edit
+                    </button>
+                  </div>
+                )}
+                {p.status === 'sent' && !isReadOnly && (
+                  <div className="px-4 pb-4">
+                    <button onClick={() => openEditProposal(p)}
+                      className="text-xs font-bold text-zinc-500 underline cursor-pointer hover:text-zinc-700 transition">
+                      Edit
                     </button>
                   </div>
                 )}
