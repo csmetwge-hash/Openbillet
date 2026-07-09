@@ -57,6 +57,27 @@ export async function POST(req: Request) {
 
       if (error) throw error;
       console.log(`✅ Subscription created — user: ${userId}`);
+
+      try {
+        const { Resend } = await import('resend');
+        const resend = new Resend(process.env.RESEND_API_KEY);
+        await resend.emails.send({
+          from: 'OpenBillet Notifications <notifications@openbillet.com>',
+          to: process.env.CONTACT_FORM_RECIPIENT || 'support@openbillet.com',
+          subject: `🎉 New subscriber — ${session.customer_details?.email || userId}`,
+          html: `
+            <div style="font-family:sans-serif;padding:24px;">
+              <p><strong>New subscription!</strong></p>
+              <p><strong>Email:</strong> ${session.customer_details?.email || 'Unknown'}</p>
+              <p><strong>User ID:</strong> ${userId}</p>
+              <p><strong>Stripe Customer:</strong> ${customerId}</p>
+              <p><strong>Time:</strong> ${new Date().toLocaleString()}</p>
+            </div>
+          `,
+        });
+      } catch (notifyErr) {
+        console.error('New subscriber notification email failed:', notifyErr);
+      }
     }
 
     // ── Subscription updated / renewed ───────────────────────────────────────
