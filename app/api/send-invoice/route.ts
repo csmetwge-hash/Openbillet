@@ -18,7 +18,8 @@ export async function POST(req: Request) {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 });
 
-    const { portalId, milestoneIds, invoiceNumber, total } = await req.json();
+    const { portalId, milestoneIds, invoiceNumber, total, docType } = await req.json();
+    const isReceipt = docType === 'receipt';
     if (!portalId || !milestoneIds) {
       return NextResponse.json({ error: 'Missing required fields.' }, { status: 400 });
     }
@@ -55,21 +56,26 @@ export async function POST(req: Request) {
       .maybeSingle();
     const brandName = portal.brand_name || settings?.brand_name || 'Your Project Team';
 
-    const invoiceUrl = `${process.env.NEXT_PUBLIC_APP_URL}/invoice/${portalId}?milestones=${milestoneIds}`;
+    const invoiceUrl = `${process.env.NEXT_PUBLIC_APP_URL}/invoice/${portalId}?milestones=${milestoneIds}&type=${docType || 'invoice'}`;
+    const docLabel = isReceipt ? 'Receipt' : 'Invoice';
 
     await resend.emails.send({
       from: 'OpenBillet Notifications <notifications@openbillet.com>',
       to: portal.client_email,
-      subject: `Invoice ${invoiceNumber} — ${portal.project_name}`,
+      subject: `${docLabel} ${invoiceNumber} — ${portal.project_name}`,
       html: `
         <div style="background:#09090b;color:#f4f4f5;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;padding:40px;border-radius:16px;max-width:600px;margin:0 auto;border:1px solid #27272a;">
-          <p style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.12em;color:#71717a;margin:0 0 4px;">${brandName} · Invoice</p>
+          <p style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.12em;color:#71717a;margin:0 0 4px;">${brandName} · ${docLabel}</p>
           <h2 style="font-size:18px;font-weight:900;color:#ffffff;margin:0 0 4px;">${portal.project_name}</h2>
-          <p style="font-size:12px;color:#71717a;margin:0 0 20px;">Invoice ${invoiceNumber}</p>
+          <p style="font-size:12px;color:#71717a;margin:0 0 20px;">${docLabel} ${invoiceNumber}</p>
           <p style="font-size:14px;color:#d4d4d8;line-height:1.7;margin:0 0 8px;">Hi ${portal.client_name},</p>
-          <p style="font-size:14px;color:#d4d4d8;line-height:1.7;margin:0 0 24px;">Your invoice is ready to view.${total ? ` Total: <strong>${total}</strong>.` : ''}</p>
+          <p style="font-size:14px;color:#d4d4d8;line-height:1.7;margin:0 0 24px;">
+            ${isReceipt
+              ? `Your receipt is ready to view.${total ? ` Total paid: <strong>${total}</strong>.` : ''}`
+              : `Your invoice is ready to view.${total ? ` Amount due: <strong>${total}</strong>.` : ''}`}
+          </p>
           <a href="${invoiceUrl}" style="display:inline-block;background:#ffffff;color:#09090b;padding:14px 28px;border-radius:10px;font-weight:700;text-decoration:none;font-size:13px;">
-            View Invoice →
+            View ${docLabel} →
           </a>
           <hr style="border:0;border-top:1px solid #27272a;margin:32px 0 16px;" />
           <p style="font-size:11px;color:#52525b;margin:0;">You're receiving this because you have an active project with ${brandName}.</p>
