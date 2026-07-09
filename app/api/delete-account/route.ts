@@ -146,6 +146,31 @@ export async function POST(req: Request) {
       console.error('Deletion notification email failed:', notifyErr);
     }
 
+    // 7. Confirm to the person who deleted their own account
+    if (userEmail) {
+      try {
+        const { Resend } = await import('resend');
+        const resend = new Resend(process.env.RESEND_API_KEY);
+        await resend.emails.send({
+          from: 'OpenBillet Support <notifications@openbillet.com>',
+          to: userEmail,
+          subject: 'Your OpenBillet account has been deleted',
+          html: `
+            <div style="font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;background:#09090b;color:#f4f4f5;padding:32px;border-radius:16px;max-width:600px;margin:0 auto;border:1px solid #27272a;">
+              <p style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.12em;color:#71717a;margin:0 0 4px;">OpenBillet</p>
+              <h2 style="font-size:18px;font-weight:900;color:#fff;margin:0 0 20px;">Account Deleted</h2>
+              <p style="font-size:14px;color:#d4d4d8;line-height:1.7;margin:0 0 12px;">Your OpenBillet account and all associated data — client portals, milestones, messages, files, and team members — have been permanently deleted.</p>
+              <p style="font-size:14px;color:#d4d4d8;line-height:1.7;margin:0 0 24px;">This action cannot be undone. If you'd like to use OpenBillet again in the future, you're welcome to sign up for a new account at any time — you'll simply be starting fresh.</p>
+              <hr style="border:0;border-top:1px solid #27272a;margin:24px 0 16px;" />
+              <p style="font-size:11px;color:#52525b;margin:0;">If you didn't request this, or believe this was done in error, contact us immediately at support@openbillet.com.</p>
+            </div>
+          `,
+        });
+      } catch (notifyErr) {
+        console.error('Deletion confirmation email to user failed:', notifyErr);
+      }
+    }
+
     return NextResponse.json({ success: true });
 
   } catch (err: any) {
