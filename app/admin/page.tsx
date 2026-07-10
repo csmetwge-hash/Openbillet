@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, Suspense } from 'react';
 import { supabase } from '@/lib/supabase';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -14,8 +14,6 @@ import {
   CheckCircle2, Clock, FolderPlus, ChevronDown, ChevronUp, Check,
   Pencil, X, Save,
 } from 'lucide-react';
-
-export const dynamic = 'force-dynamic';
 
 interface Portal {
   id: string;
@@ -68,7 +66,7 @@ const STATUS_OPTIONS = [
   { value: 'in_progress', label: 'In Progress' },
 ];
 
-export default function AdminPage() {
+function AdminContent() {
   const router = useRouter();
   const [portals, setPortals] = useState<Portal[]>([]);
   const [portalMeta, setPortalMeta] = useState<Record<string, PortalMeta>>({});
@@ -150,14 +148,9 @@ export default function AdminPage() {
         .eq('user_id', user.id)
         .maybeSingle();
 
-      console.log('DEBUG wizard check:', { membership, forceOpen, settings, shouldShow: forceOpen || (!settings?.onboarding_completed && !settings?.onboarding_dismissed_at) });
-
       if (forceOpen || (!settings?.onboarding_completed && !settings?.onboarding_dismissed_at)) {
         setShowWizard(true);
-        console.log('DEBUG: setShowWizard(true) was called');
       }
-       } else {
-      console.log('DEBUG: membership block was truthy, skipped wizard entirely', membership);
     }
 
     setLoading(false);
@@ -1029,5 +1022,17 @@ export default function AdminPage() {
         />
       )}
     </AppShell>
+  );
+}
+
+export default function AdminPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-zinc-50 flex items-center justify-center">
+        <div className="h-6 w-6 border-2 border-zinc-300 border-t-zinc-800 rounded-full animate-spin" />
+      </div>
+    }>
+      <AdminContent />
+    </Suspense>
   );
 }
