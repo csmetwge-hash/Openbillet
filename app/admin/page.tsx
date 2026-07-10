@@ -142,6 +142,9 @@ function AdminContent() {
 
     if (!membership) {
       const forceOpen = searchParams?.get('getting-started') === '1';
+      if (forceOpen) {
+        window.history.replaceState({}, '', '/admin');
+      }
       const { data: settings } = await supabase
         .from('account_settings')
         .select('onboarding_completed, onboarding_dismissed_at')
