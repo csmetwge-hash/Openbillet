@@ -6,6 +6,8 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import AppShell from '@/components/AppShell';
 import SmartDateTimePicker from '@/components/SmartDateTimePicker';
+import { useSearchParams } from 'next/navigation';
+import OnboardingWizard from '@/components/OnboardingWizard';
 import {
   Plus, Share2, Settings, Eye, Archive, RotateCcw,
   MessageSquare, Calendar, AlertTriangle, User, ChevronRight,
@@ -86,6 +88,9 @@ export default function AdminPage() {
   const [clientAddress, setClientAddress] = useState('');
   const [creating, setCreating] = useState(false);
   const [showForm, setShowForm] = useState(false);
+  const [showWizard, setShowWizard] = useState(false);
+  const searchParams = useSearchParams();
+  const [ownerUserId, setOwnerUserId] = useState('');
 
   useEffect(() => { init(); }, []);
 
@@ -98,6 +103,7 @@ export default function AdminPage() {
   const init = async () => {
     const { data: { user }, error: authErr } = await supabase.auth.getUser();
     if (authErr || !user) { router.push('/auth'); return; }
+    setOwnerUserId(user.id);
 
     const { data: membership } = await supabase
       .from('team_members')
@@ -134,8 +140,23 @@ export default function AdminPage() {
       fetchScheduledJobs(allPortals.map(p => p.id));
     }
 
+    if (!membership) {
+      const forceOpen = searchParams?.get('getting-started') === '1';
+      const { data: settings } = await supabase
+        .from('account_settings')
+        .select('onboarding_completed, onboarding_dismissed_at')
+        .eq('user_id', user.id)
+        .maybeSingle();
+
+      if (forceOpen || (!settings?.onboarding_completed && !settings?.onboarding_dismissed_at)) {
+        setShowWizard(true);
+      }
+    }
+
     setLoading(false);
   };
+
+
 
   const fetchPortalMeta = async (allPortals: Portal[]) => {
     const meta: Record<string, PortalMeta> = {};
@@ -377,6 +398,27 @@ export default function AdminPage() {
       setEditScheduleDate('');
       setEditScheduleTime('');
     }
+  };
+
+  const dismissWizard = async () => {
+    setShowWizard(false);
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    await supabase.from('account_settings').upsert(
+      { user_id: user.id, onboarding_dismissed_at: new Date().toISOString() },
+      { onConflict: 'user_id' }
+    );
+  };
+
+  const finishWizard = async () => {
+    setShowWizard(false);
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    await supabase.from('account_settings').upsert(
+      { user_id: user.id, onboarding_completed: true },
+      { onConflict: 'user_id' }
+    );
+    init();
   };
 
   const deleteMilestoneFromCard = async (portalId: string, milestoneId: string, title: string) => {
@@ -972,6 +1014,13 @@ export default function AdminPage() {
           </div>
         )}
       </div>
+      {showWizard && ownerUserId && (
+        <OnboardingWizard
+          userId={ownerUserId}
+          onClose={dismissWizard}
+          onFinish={finishWizard}
+        />
+      )}
     </AppShell>
   );
 }
