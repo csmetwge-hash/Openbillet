@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useRef } from 'react';
+import Link from 'next/link'
 import { supabase } from '@/lib/supabase';
 import { useRouter } from 'next/navigation';
 import AppShell from '@/components/AppShell'
@@ -369,7 +370,19 @@ export default function SettingsPage() {
           </div>
         </div>
 
-      {/* Data & Privacy */}
+      {/* Getting Started */}
+        <div className="bg-white border border-zinc-200 rounded-2xl p-5 space-y-3">
+          <div>
+            <h2 className="text-sm font-black text-zinc-900">Getting Started</h2>
+            <p className="text-xs text-zinc-500 mt-0.5">Replay the setup guide anytime.</p>
+          </div>
+          <Link href="/admin?getting-started=1"
+            className="w-full flex items-center justify-center gap-2 border border-zinc-200 text-zinc-700 py-3 rounded-xl text-sm font-bold hover:bg-zinc-50 transition cursor-pointer">
+            Reopen Setup Guide
+          </Link>
+        </div>
+
+        {/* Data & Privacy */}
         <div className="bg-white border border-zinc-200 rounded-2xl p-5 space-y-4">
           <div>
             <h2 className="text-sm font-black text-zinc-900">Data &amp; Privacy</h2>
