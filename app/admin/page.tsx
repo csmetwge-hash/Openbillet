@@ -148,9 +148,14 @@ export default function AdminPage() {
         .eq('user_id', user.id)
         .maybeSingle();
 
+      console.log('DEBUG wizard check:', { membership, forceOpen, settings, shouldShow: forceOpen || (!settings?.onboarding_completed && !settings?.onboarding_dismissed_at) });
+
       if (forceOpen || (!settings?.onboarding_completed && !settings?.onboarding_dismissed_at)) {
         setShowWizard(true);
+        console.log('DEBUG: setShowWizard(true) was called');
       }
+       } else {
+      console.log('DEBUG: membership block was truthy, skipped wizard entirely', membership);
     }
 
     setLoading(false);
