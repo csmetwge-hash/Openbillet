@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { supabase } from '@/lib/supabase';
-import { X, Check, Copy, ArrowRight } from 'lucide-react';
+import { X, Check, Copy, ArrowRight, Pencil } from 'lucide-react';
 
 interface Props {
   userId: string;
@@ -164,6 +164,14 @@ export default function OnboardingWizard({ userId, onClose, onFinish }: Props) {
                   className="shrink-0 p-2 bg-zinc-900 text-white rounded-lg hover:bg-zinc-700 transition cursor-pointer">
                   {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
                 </button>
+              </div>
+              <div className="bg-blue-50 border border-blue-100 rounded-xl p-3 space-y-1.5">
+                <p className="text-xs font-bold text-blue-700">Want to add more?</p>
+                <p className="text-[11px] text-blue-600 leading-relaxed">
+                  This was the quick version. Open the portal to add scheduling, assign a worker, set pricing, and more —
+                  use the <Pencil className="w-3 h-3 inline -mt-0.5" /> edit icon on any card for quick changes,
+                  or <strong>Open Full View</strong> for the complete set of options.
+                </p>
               </div>
               <button onClick={onFinish}
                 className="w-full bg-zinc-900 text-white py-3 rounded-xl text-sm font-bold hover:bg-zinc-700 transition cursor-pointer">
