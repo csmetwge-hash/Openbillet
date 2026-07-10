@@ -15,6 +15,8 @@ import {
   Pencil, X, Save,
 } from 'lucide-react';
 
+export const dynamic = 'force-dynamic';
+
 interface Portal {
   id: string;
   client_name: string;
